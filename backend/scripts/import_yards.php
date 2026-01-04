@@ -4,7 +4,7 @@ require __DIR__ . '/../src/db.php';
 
 $apiKey = $argv[1] ?? '';
 if ($apiKey === '') {
-    fwrite(STDERR, "Usage: php backend/scripts/import_yards.php API_KEY\n");
+    fwrite(STDERR, "Usage: php backend/scripts/import_yards.php 69cbe98e-7db7-43f9-9f41-bcc6bc83d70f\n");
     exit(1);
 }
 
