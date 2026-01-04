@@ -3,253 +3,235 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>Комфортные маршруты — регистрация</title>
+  <title>Комфортные маршруты — карта</title>
 
   <script src="https://api-maps.yandex.ru/2.1/?lang=ru_RU"></script>
 
   <style>
-    body { font-family: Arial, sans-serif; margin: 0; }
-    .wrap { max-width: 1200px; margin: 24px auto; padding: 0 16px; }
-    .grid { display: grid; grid-template-columns: 1.2fr 1fr; gap: 24px; align-items: start; }
-    h1 { font-size: 42px; margin: 0 0 16px; }
-    label { display:block; font-weight: 700; margin: 10px 0 6px; }
-    input { width: 100%; padding: 10px; font-size: 16px; border: 1px solid #cfcfcf; border-radius: 4px; }
-    .row2 { display:grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-    button { margin-top: 14px; padding: 10px 16px; font-size: 16px; cursor: pointer; }
-    .help { margin-top: 10px; color: #444; }
-    .out-title { font-size: 28px; margin: 24px 0 10px; font-weight: 800; }
-    pre { background: #f6f6f6; padding: 14px; border-radius: 8px; overflow:auto; min-height: 90px; }
-    #map { width: 100%; height: 560px; border-radius: 10px; overflow: hidden; border: 1px solid #e5e5e5; }
-    .yard-info { margin-top: 10px; color:#333; }
-    .badge { display:inline-block; padding: 4px 10px; border-radius: 999px; font-size: 12px; background:#eee; margin-left: 8px; }
+    :root{
+      --bg:#ffffff; --text:#111; --muted:#666; --border:#e5e5e5;
+      --card:#fafafa; --accent:#2563eb;
+      --warn-bg:#fff7ed; --warn-border:#fdba74; --warn-text:#9a3412;
+    }
+    body{ margin:0; font-family: Arial, sans-serif; background:var(--bg); color:var(--text); }
+    header{ border-bottom:1px solid var(--border); }
+    .topbar{ max-width:1200px; margin:0 auto; padding:14px 16px; display:flex; align-items:center; justify-content:space-between; gap:12px;}
+    .brand{ font-weight:700; }
+    .nav a{ color:var(--accent); text-decoration:none; margin-left:12px; }
+    .nav a:hover{ text-decoration:underline; }
+
+    .layout{ max-width:1200px; margin:16px auto; padding:0 16px; display:grid; grid-template-columns: 420px 1fr; gap:16px; }
+    @media (max-width: 980px){ .layout{ grid-template-columns:1fr; } }
+
+    .card{ background:var(--card); border:1px solid var(--border); border-radius:10px; padding:14px; }
+    label{ display:block; font-size:13px; color:var(--muted); margin-top:10px; }
+    input{ width:100%; padding:10px; border:1px solid var(--border); border-radius:8px; font-size:14px; box-sizing:border-box; background:#fff; }
+    .row{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+    button{
+      margin-top:12px; padding:10px 12px; border-radius:8px; border:1px solid var(--border);
+      background:#fff; cursor:pointer; font-weight:600;
+    }
+    button.primary{ background:var(--accent); color:#fff; border-color:var(--accent); }
+    button:disabled{ opacity:.55; cursor:not-allowed; }
+
+    .hint{ margin-top:10px; color:var(--muted); font-size:13px; line-height:1.35; }
+    .warn{ display:none; margin-top:12px; padding:10px 12px; border-radius:10px; border:1px solid var(--warn-border); background:var(--warn-bg); color:var(--warn-text); }
+    .status{ margin-top:12px; font-family: ui-monospace, Menlo, Consolas, monospace; font-size:12px; white-space:pre-wrap; background:#fff; border:1px dashed var(--border); border-radius:10px; padding:10px; }
+    #map{ width:100%; height:72vh; min-height:520px; border:1px solid var(--border); border-radius:10px; overflow:hidden; background:#f4f4f4; }
+    .chips{ display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+    .chip{ font-size:12px; padding:6px 8px; border:1px solid var(--border); border-radius:999px; background:#fff; }
   </style>
 </head>
-
 <body>
-  <div class="wrap">
-    <div class="grid">
-      <div>
-        <h1>Регистрация</h1>
-
-        <label>Email</label>
-        <input id="email" value="test5@example.com" />
-
-        <label>Пароль</label>
-        <input id="password" type="password" value="123456" />
-
-        <label>Адрес (текстом, для записи)</label>
-        <input id="address" value="Москва, улица Петровка, 20/1" />
-
-        <div class="row2">
-          <div>
-            <label>Широта (lat)</label>
-            <input id="lat" value="55.7558" />
-          </div>
-          <div>
-            <label>Долгота (lon)</label>
-            <input id="lon" value="37.6176" />
-          </div>
-        </div>
-
-        <button id="btnRegister">Зарегистрироваться</button>
-
-        <div class="out-title">Ответ сервера</div>
-        <pre id="out"></pre>
-      </div>
-
-      <div>
-        <div id="map"></div>
-        <div id="yardInfo" class="yard-info"></div>
-      </div>
-    </div>
+<header>
+  <div class="topbar">
+    <div class="brand">Комфортные маршруты</div>
+    <nav class="nav">
+      <a href="/">Карта</a>
+      <a href="/register">Регистрация</a>
+      <a href="/login">Вход</a>
+    </nav>
   </div>
+</header>
+
+<main class="layout">
+  <section class="card">
+    <h2 style="margin:0 0 8px 0;">Пеший маршрут</h2>
+    <div class="hint">
+    </div>
+
+    <label>Точка A (откуда)</label>
+    <input id="from" placeholder="Например: Москва, Тверская 1" />
+
+    <label>Точка B (куда)</label>
+    <input id="to" placeholder="Например: Москва, Красная площадь" />
+
+    <div class="chips">
+      <span class="chip">Режим: пешком</span>
+      <span class="chip">Зоны работ: /api/repairs</span>
+    </div>
+
+    <button id="buildBtn" class="primary">Построить маршрут</button>
+    <button id="clearBtn">Очистить</button>
+
+    <div id="warn" class="warn"></div>
+    <div id="status" class="status">Готово. Введите A и B, затем нажмите «Построить маршрут».</div>
+  </section>
+
+  <section>
+    <div id="map"></div>
+  </section>
+</main>
 
 <script>
-  const out = document.getElementById('out');
-  const yardInfo = document.getElementById('yardInfo');
+let map;
+let repairsObjects;
+let repairsPolygons = [];   
+let multiRoute = null;
 
-  const elEmail = document.getElementById('email');
-  const elPass  = document.getElementById('password');
-  const elAddr  = document.getElementById('address');
-  const elLat   = document.getElementById('lat');
-  const elLon   = document.getElementById('lon');
-  const btn     = document.getElementById('btnRegister');
+function setStatus(text){ document.getElementById('status').textContent = text; }
+function setWarn(text){
+  const el = document.getElementById('warn');
+  if (!text){ el.style.display='none'; el.textContent=''; return; }
+  el.style.display='block';
+  el.textContent = text;
+}
 
-  function setOutput(x) {
-    out.textContent = (typeof x === 'string') ? x : JSON.stringify(x, null, 2);
+function styleForSeverity(sev){
+  // Можно расширять: red/yellow/green.
+  if (sev === 'red')   return { fillColor:'#ef4444', fillOpacity:0.25, strokeColor:'#b91c1c', strokeWidth:2 };
+  if (sev === 'yellow')return { fillColor:'#f59e0b', fillOpacity:0.25, strokeColor:'#b45309', strokeWidth:2 };
+  if (sev === 'green') return { fillColor:'#22c55e', fillOpacity:0.20, strokeColor:'#15803d', strokeWidth:2 };
+  return { fillColor:'#ef4444', fillOpacity:0.25, strokeColor:'#b91c1c', strokeWidth:2 };
+}
+
+async function loadRepairs(){
+  setStatus('Загружаем зоны работ...');
+  repairsObjects.removeAll();
+  repairsPolygons = [];
+
+  const r = await fetch('/api/repairs', { headers: { 'Accept':'application/json' }});
+  if (!r.ok) throw new Error('Не удалось загрузить /api/repairs: ' + r.status);
+  const fc = await r.json();
+
+  if (!fc || !Array.isArray(fc.features)) {
+    throw new Error('Неверный формат GeoJSON (ожидали FeatureCollection.features[])');
   }
 
-  function toNum(v) {
-    const n = Number(v);
-    return Number.isFinite(n) ? n : null;
-  }
+  fc.features.forEach(f => {
+    if (!f.geometry || !f.geometry.type || !f.geometry.coordinates) return;
 
-  let map;
-  let clickPlacemark;
+    // Поддержим Polygon и MultiPolygon
+    const sev = (f.properties && f.properties.severity) ? f.properties.severity : 'red';
+    const style = styleForSeverity(sev);
 
-  let yardObjects;    
-  let repairsObjects;
-
-  function swapLonLat(coord) {
-    return [coord[1], coord[0]];
-  }
-
-  function addMultiPolygonToCollection(geojson, collection, styleOptions = {}) {
-    if (!geojson || geojson.type !== 'MultiPolygon') return;
-
-    for (const polygon of geojson.coordinates) {
-      const contours = polygon.map(ring => ring.map(swapLonLat));
-      const poly = new ymaps.Polygon(contours, {}, styleOptions);
-      collection.add(poly);
+    if (f.geometry.type === 'Polygon') {
+      const poly = new ymaps.Polygon(f.geometry.coordinates, f.properties || {}, style);
+      repairsObjects.add(poly);
+      repairsPolygons.push(poly);
+    } else if (f.geometry.type === 'MultiPolygon') {
+      const mp = new ymaps.Polygon(f.geometry.coordinates, f.properties || {}, style); // YM Polygon умеет MultiPolygon как массив полигонов
+      repairsObjects.add(mp);
+      repairsPolygons.push(mp);
     }
+  });
+
+  setStatus('Зоны работ загружены: ' + repairsPolygons.length);
+}
+
+function clearRoute(){
+  if (multiRoute) {
+    map.geoObjects.remove(multiRoute);
+    multiRoute = null;
   }
+  setWarn('');
+  setStatus('Маршрут очищен.');
+}
 
-  function repairColorBySeverity(severity) {
-    switch ((severity || '').toLowerCase()) {
-      case 'red': return { fill: 'rgba(220,0,0,0.35)', stroke: '#cc0000' };
-      case 'yellow': return { fill: 'rgba(255,200,0,0.35)', stroke: '#d4a300' };
-      case 'green': return { fill: 'rgba(0,170,0,0.25)', stroke: '#008a00' };
-      default: return { fill: 'rgba(0,0,0,0.15)', stroke: '#333333' };
-    }
-  }
+function routeIntersectsRepairs(activeRoute){
+  try{
+    const paths = activeRoute.getPaths();
+    const polys = repairsPolygons;
+    let hit = null;
 
-  async function loadRepairs() {
-    try {
-      const r = await fetch('/api/repairs');
-      const data = await r.json();
-
-      repairsObjects.removeAll();
-
-      if (!data || !Array.isArray(data.features)) return;
-
-      for (const f of data.features) {
-        const g = f.geometry;
-        const p = f.properties || {};
-
-        if (!g || g.type !== 'MultiPolygon') continue;
-
-        const severity = (p.severity || 'red').toLowerCase();
-
-        const style = {
-          zIndex: 10,
-        strokeWidth: 3,
-          strokeOpacity: 0.9,
-          fillOpacity: 0.25,
-          strokeColor: severity === 'yellow' ? '#E6B800'
-                     : severity === 'green'  ? '#2EAE4E'
-                     : '#D64242',
-          fillColor:   severity === 'yellow' ? '#E6B800'
-                     : severity === 'green'  ? '#2EAE4E'
-                     : '#D64242',
-        };
-
-        addMultiPolygonToCollection(g, repairsObjects, style);
+    paths.each(function(path){
+      const coords = path.geometry.getCoordinates(); 
+      const step = Math.max(1, Math.floor(coords.length / 120));
+      for (let i=0; i<coords.length; i+=step){
+        const p = coords[i];
+        for (let j=0; j<polys.length; j++){
+          if (polys[j].geometry.contains(p)) {
+            hit = polys[j];
+            return false; 
+          }
+        }
+        if (hit) return false;
       }
-    } catch (e) {
-      console.error('loadRepairs error', e);
-    }
-  }
+      return !hit;
+    });
 
-async function resolveYard(lat, lon) {
-  setOutput('Ищем двор по координатам...');
-  yardInfo.textContent = '';
-
-  const r = await fetch('/api/resolve-yard', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ lat, lon })
-  });
-
-  const data = await r.json();
-
-  if (!data.yard) {
-    setOutput('Двор не найден.');
-    yardObjects.removeAll();
-    return;
-  }
-  const y = data.yard;
-  yardInfo.textContent =
-    `Найден двор: ${y.district || ''}\n` +
-    `${y.address || ''}\n` +
-    `match_type: ${y.match_type}${y.distance_m ? ` (~${y.distance_m.toFixed(1)} м)` : ''}`;
-
-  if (y.address) {
-    const addressEl = document.getElementById('address');
-    if (addressEl) addressEl.value = y.address;
-    if (typeof elAddr !== 'undefined' && elAddr) elAddr.value = y.address;
-  }
-
-  await drawYardPolygon(y.id);
-
-  btn.disabled = false;
-  setOutput('Двор найден. Можно регистрироваться.');
-}
-
-async function drawYardPolygon(yardId) {
-  yardObjects.removeAll();
-
-  const r = await fetch(`/api/yard-geojson?id=${encodeURIComponent(yardId)}`);
-  const data = await r.json();
-
-  if (!data.geojson || data.geojson.type !== 'MultiPolygon') {
-    setOutput('Двор найден, но геометрия не получена.');
-    return;
-  }
-  addMultiPolygonToCollection(data.geojson, yardObjects, {
-    zIndex: 20,
-    strokeWidth: 3,
-    strokeOpacity: 0.95,
-    fillOpacity: 0.22,
-    strokeColor: '#1E88E5',
-    fillColor: '#1E88E5'
-  });
-
-  const bounds = yardObjects.getBounds();
-  if (bounds) {
-    map.setBounds(bounds, { checkZoomRange: true, zoomMargin: 30 });
+    return hit;
+  } catch(e){
+    return null;
   }
 }
 
-
-
-  function onMapClick(coords) {
-    const lat = coords[0];
-    const lon = coords[1];
-
-    elLat.value = lat.toFixed(6);
-    elLon.value = lon.toFixed(6);
-
-    if (!clickPlacemark) {
-      clickPlacemark = new ymaps.Placemark(coords, {}, { preset: 'islands#blueCircleDotIcon' });
-      map.geoObjects.add(clickPlacemark);
-    } else {
-      clickPlacemark.geometry.setCoordinates(coords);
-    }
-
-    resolveYard(lat, lon);
+function buildRoute(){
+  const from = document.getElementById('from').value.trim();
+  const to = document.getElementById('to').value.trim();
+  if (!from || !to){
+    setWarn('Введите обе точки: A и B.');
+    return;
   }
 
-  async function register() {
-    const email = elEmail.value.trim();
-    const password = elPass.value;
-    const address = elAddr.value.trim();
-    const lat = toNum(elLat.value);
-    const lon = toNum(elLon.value);
+  setWarn('');
+  setStatus('Строим маршрут (пешком)...');
 
-    if (!email || !password || lat === null || lon === null) {
-      setOutput({error: 'Заполните email/пароль и координаты'});
+  if (multiRoute) map.geoObjects.remove(multiRoute);
+
+  multiRoute = new ymaps.multiRouter.MultiRoute({
+    referencePoints: [from, to],
+    params: {
+      routingMode: 'pedestrian'
+    }
+  }, {
+    boundsAutoApply: true,
+    wayPointVisible: true,
+    routeActiveStrokeWidth: 6,
+    routeActiveStrokeColor: '#2563eb',
+    routeStrokeWidth: 4,
+    routeStrokeColor: '#93c5fd'
+  });
+
+  map.geoObjects.add(multiRoute);
+
+  multiRoute.model.events.add('requestsuccess', function(){
+    const activeRoute = multiRoute.getActiveRoute();
+    if (!activeRoute){
+      setStatus('Маршрут не найден.');
       return;
     }
 
-    const res = await fetch('/api/register', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({email, password, address, lat, lon})
-    });
+    const hit = routeIntersectsRepairs(activeRoute);
+    if (hit){
+      const title = hit.properties.get('title') || 'Зона работ';
+      setWarn('Внимание: маршрут пересекает зону работ: ' + title + '. Попробуйте изменить точки или перетащить маршрут.');
+    } else {
+      setWarn('');
+    }
 
-    const data = await res.json();
-    setOutput(data);
-  }
+    const dist = activeRoute.properties.get('distance');
+    const time = activeRoute.properties.get('duration');
+    const distText = dist ? dist.text : '—';
+    const timeText = time ? time.text : '—';
+    setStatus('Маршрут построен. Дистанция: ' + distText + ', время: ' + timeText + '.');
+  });
+
+  multiRoute.model.events.add('requestfail', function(e){
+    setWarn('Не удалось построить маршрут. Проверьте адреса.');
+    setStatus('Ошибка маршрутизации.');
+  });
+}
 
 ymaps.ready(async () => {
   map = new ymaps.Map('map', {
@@ -258,34 +240,19 @@ ymaps.ready(async () => {
     controls: ['zoomControl']
   });
 
-  yardObjects = new ymaps.GeoObjectCollection();
   repairsObjects = new ymaps.GeoObjectCollection();
-
   map.geoObjects.add(repairsObjects);
-  map.geoObjects.add(yardObjects);
 
-  // Одна метка (точка)
-  clickPlacemark = new ymaps.Placemark(
-    map.getCenter(),
-    {},
-    { preset: 'islands#blueCircleDotIcon', draggable: false }
-  );
-  map.geoObjects.add(clickPlacemark);
+  document.getElementById('buildBtn').addEventListener('click', buildRoute);
+  document.getElementById('clearBtn').addEventListener('click', clearRoute);
 
-  // Один обработчик клика по карте
-  map.events.add('click', (e) => {
-    const coords = e.get('coords'); // [lat, lon]
-    onMapClick(coords);
-  });
-
-  btn.addEventListener('click', register);
-
-  btn.disabled = true;
-  setOutput('Кликните по карте, чтобы выбрать точку.');
-
-  await loadRepairs();
+  try{
+    await loadRepairs();
+  } catch(e){
+    setWarn('Не удалось загрузить зоны работ: ' + e.message);
+    setStatus('Проверьте, что backend запущен и /api/repairs отдаёт GeoJSON.');
+  }
 });
-
 </script>
 </body>
 </html>

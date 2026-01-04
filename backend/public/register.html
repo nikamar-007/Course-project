@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Комфортные маршруты — регистрация</title>
+
+  <script src="https://api-maps.yandex.ru/2.1/?lang=ru_RU"></script>
+
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; }
+    .wrap { max-width: 1200px; margin: 24px auto; padding: 0 16px; }
+    .grid { display: grid; grid-template-columns: 1.2fr 1fr; gap: 24px; align-items: start; }
+    h1 { font-size: 42px; margin: 0 0 16px; }
+    label { display:block; font-weight: 700; margin: 10px 0 6px; }
+    input { width: 100%; padding: 10px; font-size: 16px; border: 1px solid #cfcfcf; border-radius: 4px; }
+    .row2 { display:grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    button { margin-top: 14px; padding: 10px 16px; font-size: 16px; cursor: pointer; }
+    .help { margin-top: 10px; color: #444; }
+    .out-title { font-size: 28px; margin: 24px 0 10px; font-weight: 800; }
+    pre { background: #f6f6f6; padding: 14px; border-radius: 8px; overflow:auto; min-height: 90px; }
+    #map { width: 100%; height: 560px; border-radius: 10px; overflow: hidden; border: 1px solid #e5e5e5; }
+    .yard-info { margin-top: 10px; color:#333; }
+    .badge { display:inline-block; padding: 4px 10px; border-radius: 999px; font-size: 12px; background:#eee; margin-left: 8px; }
+  </style>
+</head>
+
+<body>
+  <div class="wrap">
+    <div class="grid">
+      <div>
+        <h1>Регистрация</h1>
+
+        <label>Email</label>
+        <input id="email" value="test5@example.com" />
+
+        <label>Пароль</label>
+        <input id="password" type="password" value="123456" />
+
+        <label>Адрес (текстом, для записи)</label>
+        <input id="address" value="Москва, улица Петровка, 20/1" />
+
+        <div class="row2">
+          <div>
+            <label>Широта (lat)</label>
+            <input id="lat" value="55.7558" />
+          </div>
+          <div>
+            <label>Долгота (lon)</label>
+            <input id="lon" value="37.6176" />
+          </div>
+        </div>
+
+        <button id="btnRegister">Зарегистрироваться</button>
+
+        <div class="out-title">Ответ сервера</div>
+        <pre id="out"></pre>
+      </div>
+
+      <div>
+        <div id="map"></div>
+        <div id="yardInfo" class="yard-info"></div>
+      </div>
+    </div>
+  </div>
+
+<script>
+  const out = document.getElementById('out');
+  const yardInfo = document.getElementById('yardInfo');
+
+  const elEmail = document.getElementById('email');
+  const elPass  = document.getElementById('password');
+  const elAddr  = document.getElementById('address');
+  const elLat   = document.getElementById('lat');
+  const elLon   = document.getElementById('lon');
+  const btn     = document.getElementById('btnRegister');
+
+  function setOutput(x) {
+    out.textContent = (typeof x === 'string') ? x : JSON.stringify(x, null, 2);
+  }
+
+  function toNum(v) {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  }
+
+  let map;
+  let clickPlacemark;
+
+  let yardObjects;    
+  let repairsObjects;
+
+  function swapLonLat(coord) {
+    return [coord[1], coord[0]];
+  }
+
+  function addMultiPolygonToCollection(geojson, collection, styleOptions = {}) {
+    if (!geojson || geojson.type !== 'MultiPolygon') return;
+
+    for (const polygon of geojson.coordinates) {
+      const contours = polygon.map(ring => ring.map(swapLonLat));
+      const poly = new ymaps.Polygon(contours, {}, styleOptions);
+      collection.add(poly);
+    }
+  }
+
+  function repairColorBySeverity(severity) {
+    switch ((severity || '').toLowerCase()) {
+      case 'red': return { fill: 'rgba(220,0,0,0.35)', stroke: '#cc0000' };
+      case 'yellow': return { fill: 'rgba(255,200,0,0.35)', stroke: '#d4a300' };
+      case 'green': return { fill: 'rgba(0,170,0,0.25)', stroke: '#008a00' };
+      default: return { fill: 'rgba(0,0,0,0.15)', stroke: '#333333' };
+    }
+  }
+
+  async function loadRepairs() {
+    try {
+      const r = await fetch('/api/repairs');
+      const data = await r.json();
+
+      repairsObjects.removeAll();
+
+      if (!data || !Array.isArray(data.features)) return;
+
+      for (const f of data.features) {
+        const g = f.geometry;
+        const p = f.properties || {};
+
+        if (!g || g.type !== 'MultiPolygon') continue;
+
+        const severity = (p.severity || 'red').toLowerCase();
+
+        const style = {
+          strokeWidth: 3,
+          strokeOpacity: 0.9,
+          fillOpacity: 0.25,
+          strokeColor: severity === 'yellow' ? '#E6B800'
+                     : severity === 'green'  ? '#2EAE4E'
+                     : '#D64242',
+          fillColor:   severity === 'yellow' ? '#E6B800'
+                     : severity === 'green'  ? '#2EAE4E'
+                     : '#D64242',
+        };
+
+        addMultiPolygonToCollection(g, repairsObjects, style);
+      }
+    } catch (e) {
+      console.error('loadRepairs error', e);
+    }
+  }
+
+async function resolveYard(lat, lon) {
+  setOutput('Ищем двор по координатам...');
+  yardInfo.textContent = '';
+
+  const r = await fetch('/api/resolve-yard', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ lat, lon })
+  });
+
+  const data = await r.json();
+
+  if (!data.yard) {
+    setOutput('Двор не найден.');
+    yardObjects.removeAll();
+    return;
+  }
+  const y = data.yard;
+  yardInfo.textContent =
+    `Найден двор: ${y.district || ''}\n` +
+    `${y.address || ''}\n` +
+    `match_type: ${y.match_type}${y.distance_m ? ` (~${y.distance_m.toFixed(1)} м)` : ''}`;
+
+  if (y.address) {
+    const addressEl = document.getElementById('address');
+    if (addressEl) addressEl.value = y.address;
+  }
+
+  await drawYardPolygon(y.id);
+
+  btn.disabled = false;
+  setOutput('Двор найден. Можно регистрироваться.');
+}
+
+async function drawYardPolygon(yardId) {
+  yardObjects.removeAll();
+
+  const r = await fetch(`/api/yard-geojson?id=${encodeURIComponent(yardId)}`);
+  const data = await r.json();
+
+  if (!data.geojson || data.geojson.type !== 'MultiPolygon') {
+    setOutput('Двор найден, но геометрия не получена.');
+    return;
+  }
+
+  addMultiPolygonToCollection(data.geojson, yardObjects, {
+    strokeWidth: 3,
+    strokeOpacity: 0.9,
+    fillOpacity: 0.25,
+    strokeColor: '#0b57d0',
+    fillColor: '#0b57d033'
+  });
+
+  const bounds = yardObjects.getBounds();
+  if (bounds) {
+    map.setBounds(bounds, { checkZoomRange: true, zoomMargin: 30 });
+  }
+}
+
+  function onMapClick(coords) {
+    const lat = coords[0];
+    const lon = coords[1];
+
+    elLat.value = lat.toFixed(6);
+    elLon.value = lon.toFixed(6);
+
+    if (!clickPlacemark) {
+      clickPlacemark = new ymaps.Placemark(coords, {}, { preset: 'islands#blueCircleDotIcon' });
+      map.geoObjects.add(clickPlacemark);
+    } else {
+      clickPlacemark.geometry.setCoordinates(coords);
+    }
+
+    resolveYard(lat, lon);
+  }
+
+  async function register() {
+    const email = elEmail.value.trim();
+    const password = elPass.value;
+    const address = elAddr.value.trim();
+    const lat = toNum(elLat.value);
+    const lon = toNum(elLon.value);
+
+    if (!email || !password || lat === null || lon === null) {
+      setOutput({error: 'Заполните email/пароль и координаты'});
+      return;
+    }
+
+    const res = await fetch('/api/register', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({email, password, address, lat, lon})
+    });
+
+    const data = await res.json();
+    setOutput(data);
+  }
+
+ymaps.ready(async () => {
+  map = new ymaps.Map('map', {
+    center: [55.7558, 37.6176],
+    zoom: 12,
+    controls: ['zoomControl']
+  });
+
+  yardObjects = new ymaps.GeoObjectCollection();
+  repairsObjects = new ymaps.GeoObjectCollection();
+
+  map.geoObjects.add(repairsObjects);
+  map.geoObjects.add(yardObjects);
+
+  clickPlacemark = new ymaps.Placemark(
+    map.getCenter(),
+    {},
+    { preset: 'islands#blueCircleDotIcon', draggable: false }
+  );
+  map.geoObjects.add(clickPlacemark);
+
+  map.events.add('click', (e) => {
+    const coords = e.get('coords');
+    onMapClick(coords);
+  });
+
+  btn.addEventListener('click', register);
+
+  btn.disabled = true;
+  setOutput('Кликните по карте, чтобы выбрать точку.');
+
+  await loadRepairs();
+});
+
+</script>
+</body>
+</html>
