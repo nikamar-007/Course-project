@@ -1,19 +1,10 @@
 <?php
 declare(strict_types=1);
-
 require __DIR__ . '/../src/db.php';
-
-/**
- * Массовый импорт дворовых территорий (dataset 64036) из data.mos.ru в PostGIS.
- * Использует cURL. Для вашей среды SSL-проверка временно отключена (см. ниже).
- *
- * Запуск:
- *   php backend/scripts/import_yards.php YOUR_API_KEY
- */
 
 $apiKey = $argv[1] ?? '';
 if ($apiKey === '') {
-    fwrite(STDERR, "Usage: php backend/scripts/import_yards.php YOUR_API_KEY\n");
+    fwrite(STDERR, "Usage: php backend/scripts/import_yards.php API_KEY\n");
     exit(1);
 }
 
@@ -23,9 +14,9 @@ $release = 288;
 
 $baseUrl = "https://apidata.mos.ru/v1/datasets/{$datasetId}/features";
 
-$top = 200;      // размер страницы
-$skip = 0;       // смещение
-$maxPages = 1000000; // защита от бесконечного цикла
+$top = 200;      
+$skip = 0;       
+$maxPages = 1000000; 
 
 function httpGetJson(string $url): array {
     $ch = curl_init($url);
@@ -36,9 +27,6 @@ function httpGetJson(string $url): array {
         CURLOPT_CONNECTTIMEOUT => 20,
         CURLOPT_USERAGENT => 'walk-routes-importer/1.0',
 
-        // ВАЖНО: в вашей среде был SSL error (self-signed chain).
-        // Для импорта учебного проекта отключаем проверку.
-        // Позже можно настроить CA bundle и вернуть true/2.
         CURLOPT_SSL_VERIFYPEER => false,
         CURLOPT_SSL_VERIFYHOST => 0,
     ]);
@@ -63,7 +51,6 @@ function httpGetJson(string $url): array {
     return $json;
 }
 
-// Рекурсивный поиск полей в properties/attributes
 function findKeyRecursive($data, string $key) {
     if (!is_array($data)) return null;
     if (array_key_exists($key, $data)) return $data[$key];
@@ -110,7 +97,6 @@ $upsert = $pdo->prepare("
       updated_at = NOW();
 ");
 
-
 $totalUpserts = 0;
 $page = 0;
 
@@ -138,7 +124,6 @@ while ($page < $maxPages) {
         $globalId = findKeyRecursive($props, 'global_id');
         if ($globalId === null) continue;
 
-        /// Нормализация геометрии к MultiPolygon
         $type = $geom['type'] ?? '';
 
         if ($type === 'Polygon') {
@@ -150,7 +135,6 @@ while ($page < $maxPages) {
         }
 
         if ($type === 'GeometryCollection') {
-            // Берём из коллекции только Polygon/MultiPolygon
             $polys = [];
             $geomsIn = $geom['geometries'] ?? [];
             if (is_array($geomsIn)) {
@@ -168,7 +152,6 @@ while ($page < $maxPages) {
             }
 
             if (count($polys) === 0) {
-                // в коллекции нет полигонов — пропускаем
                 continue;
             }
 
@@ -178,24 +161,19 @@ while ($page < $maxPages) {
             ];
             $type = 'MultiPolygon';
         }
-
         if ($type !== 'MultiPolygon') {
-            // Другие типы геометрии (Point/LineString и т.п.) нам не подходят
             continue;
         }
 
 
         $admArea  = findKeyRecursive($props, 'AdmArea');
         $district = findKeyRecursive($props, 'District');
-
         $address = null;
         $addresses = findKeyRecursive($props, 'Addresses');
         if (is_array($addresses) && isset($addresses[0]['Address'])) {
             $address = $addresses[0]['Address'];
         }
-
         $geomGeojson = json_encode($geom, JSON_UNESCAPED_UNICODE);
-
         $upsert->execute([
             ':global_id' => (int)$globalId,
             ':adm_area'  => $admArea ? (string)$admArea : null,
@@ -208,9 +186,7 @@ while ($page < $maxPages) {
     }
 
     $pdo->commit();
-
     echo "Imported page: skip={$skip}, got=" . count($features) . ", totalUpserts={$totalUpserts}\n";
-
     $skip += $top;
     $page++;
 }

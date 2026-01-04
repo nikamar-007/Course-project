@@ -3,17 +3,6 @@ declare(strict_types=1);
 
 require __DIR__ . '/../src/db.php';
 
-/**
- * Импорт 1 записи дворовой территории из data.mos.ru (dataset 64036) в PostGIS.
- * Использует cURL (надёжнее на Windows).
- *
- * Запуск:
- *   php backend/scripts/import_yards_one.php YOUR_API_KEY
- *
- * Или ключ из backend/.env:
- *   MOS_API_KEY=...
- */
-
 function readEnvFile(string $path): array {
     if (!is_file($path)) return [];
     $vars = [];
@@ -28,10 +17,10 @@ function readEnvFile(string $path): array {
 
 $env = readEnvFile(__DIR__ . '/../.env');
 
-$apiKey = $argv[1] ?? ($env['MOS_API_KEY'] ?? '');
+$apiKey = $argv[1] ?? ($env['API_KEY'] ?? '');
 if ($apiKey === '') {
     fwrite(STDERR, "Usage: php backend/scripts/import_yards_one.php YOUR_API_KEY\n");
-    fwrite(STDERR, "Or set MOS_API_KEY in backend/.env\n");
+    fwrite(STDERR, "Or set API_KEY in backend/.env\n");
     exit(1);
 }
 
@@ -93,7 +82,6 @@ function findKeyRecursive($data, string $key) {
 $pdo = db();
 echo "DB: " . $pdo->query("select current_database()")->fetchColumn() . PHP_EOL;
 
-// Таблица должна быть уже правильной (с adm_area, district, address, geom)
 $pdo->exec("
   CREATE TABLE IF NOT EXISTS public.yard_territories (
     id         BIGSERIAL PRIMARY KEY,
@@ -110,9 +98,6 @@ $pdo->exec("CREATE INDEX IF NOT EXISTS yard_territories_geom_idx ON public.yard_
 try {
     $data = httpGetJson($url);
 } catch (Throwable $e) {
-    // Частая проблема на Windows: SSL-сертификаты.
-    // Для учебного проекта можно временно отключить проверку и убедиться, что причина в SSL.
-    // Если хотите — потом настроим ca-bundle и вернём проверку обратно.
     echo "HTTP ERROR: " . $e->getMessage() . PHP_EOL;
     echo "If this looks like SSL/cert issue, tell me the message and I will give the exact fix.\n";
     exit(1);
@@ -132,7 +117,6 @@ $globalId = findKeyRecursive($props, 'global_id');
 $admArea  = findKeyRecursive($props, 'AdmArea');
 $district = findKeyRecursive($props, 'District');
 
-// Адрес чаще всего в Addresses[0].Address
 $address = null;
 $addresses = findKeyRecursive($props, 'Addresses');
 if (is_array($addresses) && isset($addresses[0]['Address'])) {
@@ -152,7 +136,6 @@ if (!is_array($geom) || !isset($geom['type'], $geom['coordinates'])) {
     exit(1);
 }
 
-// Нормализуем Polygon -> MultiPolygon
 if ($geom['type'] === 'Polygon') {
     $geom = [
         'type' => 'MultiPolygon',
