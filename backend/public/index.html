@@ -131,7 +131,8 @@
         const severity = (p.severity || 'red').toLowerCase();
 
         const style = {
-          strokeWidth: 3,
+          zIndex: 10,
+        strokeWidth: 3,
           strokeOpacity: 0.9,
           fillOpacity: 0.25,
           strokeColor: severity === 'yellow' ? '#E6B800'
@@ -149,65 +150,67 @@
     }
   }
 
-  async function resolveYard(lat, lon) {
-    setOutput('Ищем двор по координатам...');
-    yardInfo.textContent = '';
+async function resolveYard(lat, lon) {
+  setOutput('Ищем двор по координатам...');
+  yardInfo.textContent = '';
+
+  const r = await fetch('/api/resolve-yard', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ lat, lon })
+  });
+
+  const data = await r.json();
+
+  if (!data.yard) {
+    setOutput('Двор не найден.');
     yardObjects.removeAll();
-
-    const res = await fetch('/api/resolve-yard', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({lat, lon})
-    });
-
-    const data = await res.json();
-    setOutput(data);
-
-    if (!data || !data.yard) {
-      yardInfo.textContent = 'Двор не найден.';
-      return;
-    }
-
-    if (data.yard.address) {
-      elAddr.value = data.yard.address;
-    }
-
-    const id = data.yard.id;
-    const district = data.yard.district || '';
-    const matchType = data.yard.match_type || '';
-    const dist = data.yard.distance_m;
-
-    let msg = `Найден двор: ${district}`;
-    if (matchType) msg += `  `;
-    yardInfo.textContent = msg;
-
-    const gRes = await fetch(`/api/yard-geojson?id=${encodeURIComponent(id)}`);
-    const gData = await gRes.json();
-
-    if (!gData || !gData.geojson) {
-      yardInfo.textContent = `Двор найден (id=${id}), но геометрия не получена.`;
-      return;
-    }
-
-    addMultiPolygonToCollection(gData.geojson, yardObjects, {
-      strokeColor: '#0A66FF',
-      strokeWidth: 4,
-      strokeOpacity: 0.95,
-      fillColor: '#0A66FF',
-      fillOpacity: 0.18
-    });
-
-    const bounds = yardObjects.getBounds();
-    if (bounds) map.setBounds(bounds, { checkZoomRange: true, zoomMargin: 30 });
-
-    const distText = (dist === null || dist === undefined) ? '' : ` (~${dist.toFixed(1)} м)`;
-    yardInfo.textContent =
-      `Найден двор: ${district}\n` +
-      `${data.yard.address || ''}\n` +
-      `match_type: ${matchType}${distText}`;
-
-    btn.disabled = false;
+    return;
   }
+  const y = data.yard;
+  yardInfo.textContent =
+    `Найден двор: ${y.district || ''}\n` +
+    `${y.address || ''}\n` +
+    `match_type: ${y.match_type}${y.distance_m ? ` (~${y.distance_m.toFixed(1)} м)` : ''}`;
+
+  if (y.address) {
+    const addressEl = document.getElementById('address');
+    if (addressEl) addressEl.value = y.address;
+    if (typeof elAddr !== 'undefined' && elAddr) elAddr.value = y.address;
+  }
+
+  await drawYardPolygon(y.id);
+
+  btn.disabled = false;
+  setOutput('Двор найден. Можно регистрироваться.');
+}
+
+async function drawYardPolygon(yardId) {
+  yardObjects.removeAll();
+
+  const r = await fetch(`/api/yard-geojson?id=${encodeURIComponent(yardId)}`);
+  const data = await r.json();
+
+  if (!data.geojson || data.geojson.type !== 'MultiPolygon') {
+    setOutput('Двор найден, но геометрия не получена.');
+    return;
+  }
+  addMultiPolygonToCollection(data.geojson, yardObjects, {
+    zIndex: 20,
+    strokeWidth: 3,
+    strokeOpacity: 0.95,
+    fillOpacity: 0.22,
+    strokeColor: '#1E88E5',
+    fillColor: '#1E88E5'
+  });
+
+  const bounds = yardObjects.getBounds();
+  if (bounds) {
+    map.setBounds(bounds, { checkZoomRange: true, zoomMargin: 30 });
+  }
+}
+
+
 
   function onMapClick(coords) {
     const lat = coords[0];
@@ -248,28 +251,41 @@
     setOutput(data);
   }
 
-  ymaps.ready(async () => {
-    map = new ymaps.Map('map', {
-      center: [55.7558, 37.6176],
-      zoom: 12,
-      controls: ['zoomControl']
-    });
-
-    yardObjects = new ymaps.GeoObjectCollection();
-    repairsObjects = new ymaps.GeoObjectCollection();
-
-    map.geoObjects.add(repairsObjects);
-    map.geoObjects.add(yardObjects);
-
-    map.events.add('click', (e) => onMapClick(e.get('coords')));
-
-    btn.addEventListener('click', register);
-
-    btn.disabled = true;
-    setOutput('Кликните по карте, чтобы выбрать точку.');
-
-    await loadRepairs();
+ymaps.ready(async () => {
+  map = new ymaps.Map('map', {
+    center: [55.7558, 37.6176],
+    zoom: 12,
+    controls: ['zoomControl']
   });
+
+  yardObjects = new ymaps.GeoObjectCollection();
+  repairsObjects = new ymaps.GeoObjectCollection();
+
+  map.geoObjects.add(repairsObjects);
+  map.geoObjects.add(yardObjects);
+
+  // Одна метка (точка)
+  clickPlacemark = new ymaps.Placemark(
+    map.getCenter(),
+    {},
+    { preset: 'islands#blueCircleDotIcon', draggable: false }
+  );
+  map.geoObjects.add(clickPlacemark);
+
+  // Один обработчик клика по карте
+  map.events.add('click', (e) => {
+    const coords = e.get('coords'); // [lat, lon]
+    onMapClick(coords);
+  });
+
+  btn.addEventListener('click', register);
+
+  btn.disabled = true;
+  setOutput('Кликните по карте, чтобы выбрать точку.');
+
+  await loadRepairs();
+});
+
 </script>
 </body>
 </html>

@@ -31,6 +31,19 @@ if ($method === 'GET' && $path === '/api/health') {
     jsonOut(['ok' => true]);
 }
 
+if ($method === 'GET' && $path === '/api/resolve-yard') {
+    $lat = isset($_GET['lat']) ? (float)$_GET['lat'] : null;
+    $lon = isset($_GET['lon']) ? (float)$_GET['lon'] : null;
+
+    if ($lat === null || $lon === null) {
+        jsonOut(['error' => 'lat/lon required'], 400);
+    }
+
+    $_SERVER['REQUEST_METHOD'] = 'POST';
+
+}
+
+
 if ($method === 'POST' && $path === '/api/resolve-yard') {
     $body = readJsonBody();
     $lat = isset($body['lat']) ? (float)$body['lat'] : null;
