@@ -4,3 +4,27 @@ html, body { height:100%; margin:0; }
   font-size: 9px;
   background: rgba(255,255,255,0.6);
 }
+
+.suggest{
+  position: relative;
+  margin-top: 6px;
+}
+.suggest-list{
+  position:absolute;
+  z-index:9999;
+  left:0; right:0;
+  top:0;
+  background:#fff;
+  border:1px solid #ddd;
+  border-radius:10px;
+  overflow:hidden;
+  box-shadow: 0 8px 24px rgba(0,0,0,.08);
+}
+.suggest-item{
+  padding:10px 12px;
+  cursor:pointer;
+  font-size:14px;
+}
+.suggest-item:hover{
+  background:#f3f7ff;
+}
