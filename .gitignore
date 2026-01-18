@@ -1,3 +1,4 @@
 backend/.env
 backend/uploads/
 .env
+public/uploads/
