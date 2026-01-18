@@ -1,0 +1,817 @@
+
+<!doctype html>
+<div id="landingOverlay" style="display: none;">
+  <div class="coral-background">
+    <div class="coral-glow coral-glow-1"></div>
+    <div class="coral-glow coral-glow-2"></div>
+    <div class="coral-glow coral-glow-3"></div>
+    <div class="coral-particle particle-1"></div>
+    <div class="coral-particle particle-2"></div>
+    <div class="coral-particle particle-3"></div>
+  </div>
+  <div class="landing-container">
+    <button class="landing-close" onclick="hideLandingCard()" aria-label="Закрыть">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+        <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+    </button>
+    <div class="main-hero">
+      <div class="hero-icon-animation">
+        <div class="walking-icon">🚶‍♂️</div>
+        <div class="icon-trail"></div>
+      </div>
+      <h1 class="hero-title">
+        <span class="title-gradient">МойМаршрут</span>
+        <span class="title-sub">Интеллектуальная навигация для пешеходов</span>
+      </h1>
+      <p class="hero-description">
+        Обходите ремонтные работы в Москве, стройте оптимальные маршруты 
+        и наслаждайтесь временем с помощью умной пешеходной навигации
+      </p>
+      
+      <div class="hero-cta">
+        <button id="startExploringBtn" class="hero-btn coral-glow-btn">
+          <span class="btn-sparkle">✨</span>
+          <span class="btn-text">Начать исследование</span>
+          <span class="btn-arrow">⟶</span>
+          <div class="btn-wave"></div>
+        </button>
+      </div>
+    </div>
+    <div class="quick-start">
+      <div class="section-header">
+        <h2 class="section-title">Быстрый старт с МойМаршрут</h2>
+        <p class="section-subtitle">Всего 3 шага для начала работы с платформой</p>
+      </div>
+      
+      <div class="quick-steps">
+        <div class="step-card">
+          <div class="step-number">1</div>
+          <div class="step-icon">🗺️</div>
+          <h3 class="step-title">Откройте карту</h3>
+          <p class="step-description">
+            Нажмите "Начать исследование" для перехода на интерактивную карту Москвы
+          </p>
+        </div>
+        
+        <div class="step-card">
+          <div class="step-number">2</div>
+          <div class="step-icon">🚧</div>
+          <h3 class="step-title">Отметьте зоны</h3>
+          <p class="step-description">
+            Кликните "Отметить зону ремонта" на панели и по карте для добавления зоны
+          </p>
+        </div>
+        
+        <div class="step-card">
+          <div class="step-number">3</div>
+          <div class="step-icon">📍</div>
+          <h3 class="step-title">Стройте маршрут</h3>
+          <p class="step-description">
+            Используйте панель управления для построения маршрутов от А до Б с обходом препятствий
+          </p>
+        </div>
+      </div>
+    </div>
+    <div class="site-integration">
+      <div class="section-header">
+        <h2 class="section-title">Полная экосистема</h2>
+      </div>
+      
+      <div class="integration-grid">
+        <a href="/index.html" class="integration-card" data-page="map">
+          <div class="card-icon">🗺️</div>
+          <h3>Главная карта</h3>
+          <p>Интерактивная карта с зонами ремонта и построением маршрутов</p>
+          <span class="card-link">Перейти →</span>
+        </a>
+        
+        <a href="/profile.html" class="integration-card" data-page="profile">
+          <div class="card-icon">👤</div>
+          <h3>Ваш профиль</h3>
+          <p>Управление данными</p>
+          <span class="card-link">Перейти →</span>
+        </a>
+        
+        <a href="/notifications.html" class="integration-card" data-page="notifications">
+          <div class="card-icon">🔔</div>
+          <h3>Уведомления</h3>
+          <p>Все оповещения в одном месте.</p>
+          <span class="card-link">Перейти →</span>
+        </a>
+        
+        <a href="/feedback.html" class="integration-card" data-page="feedback">
+          <div class="card-icon">💬</div>
+          <h3>Обратная связь</h3>
+          <p>Сообщите о проблеме, предложите улучшение или задайте вопрос</p>
+          <span class="card-link">Перейти →</span>
+        </a>
+        
+        <a href="/login.html" class="integration-card" data-page="login">
+          <div class="card-icon">🔑</div>
+          <h3>Вход в аккаунт</h3>
+          <p>Доступ к персонализированным функциям</p>
+          <span class="card-link">Перейти →</span>
+        </a>
+        
+        <a href="/register.html" class="integration-card" data-page="register">
+          <div class="card-icon">✨</div>
+          <h3>Регистрация</h3>
+          <p>Создайте аккаунт для более широкого функционала</p>
+          <span class="card-link">Перейти →</span>
+        </a>
+      </div>
+    </div>
+
+<style>
+:root {
+  --coral-primary: #FF7F7F;
+  --coral-secondary: #FFA07A;
+  --coral-light: #FFE4E1;
+  --coral-dark: #CD5C5C;
+  --coral-gradient: linear-gradient(135deg, #FF7F7F, #FFA07A, #FFB6C1);
+  --coral-shadow: 0 10px 40px rgba(255, 127, 127, 0.3);
+  --text-dark: #333333;
+  --text-light: #666666;
+  --bg-light: #FFF5F5;
+}
+.coral-background {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, var(--bg-light) 0%, #FFF0F0 100%);
+  z-index: 1;
+}
+
+.coral-glow {
+  position: absolute;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--coral-primary) 0%, transparent 70%);
+  opacity: 0.3;
+  filter: blur(40px);
+}
+
+.coral-glow-1 {
+  width: 800px;
+  height: 800px;
+  top: -400px;
+  left: -200px;
+  animation: float 20s infinite linear;
+}
+
+.coral-glow-2 {
+  width: 600px;
+  height: 600px;
+  bottom: -300px;
+  right: -200px;
+  animation: float 25s infinite linear reverse;
+}
+
+.coral-glow-3 {
+  width: 400px;
+  height: 400px;
+  top: 50%;
+  left: 80%;
+  animation: float 30s infinite linear;
+}
+
+.coral-particle {
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  background: var(--coral-primary);
+  border-radius: 50%;
+  opacity: 0.3;
+}
+
+.particle-1 { top: 20%; left: 10%; animation: particle-float 15s infinite; }
+.particle-2 { top: 60%; left: 30%; animation: particle-float 20s infinite; }
+.particle-3 { top: 40%; left: 70%; animation: particle-float 25s infinite; }
+
+@keyframes float {
+  0%, 100% { transform: translate(0, 0) rotate(0deg); }
+  25% { transform: translate(50px, 50px) rotate(90deg); }
+  50% { transform: translate(0, 100px) rotate(180deg); }
+  75% { transform: translate(-50px, 50px) rotate(270deg); }
+}
+
+@keyframes particle-float {
+  0%, 100% { transform: translateY(0); opacity: 0.3; }
+  50% { transform: translateY(-20px); opacity: 0.6; }
+}
+.landing-container {
+  position: relative;
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+  z-index: 2;
+  animation: slideUp 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+  max-height: 100vh; 
+  overflow-y: auto;  
+  overflow-x: hidden; 
+  
+  scrollbar-width: thin;
+  scrollbar-color: var(--coral-primary) var(--coral-light);
+}
+
+.landing-container::-webkit-scrollbar {
+  width: 8px;
+}
+
+.landing-container::-webkit-scrollbar-track {
+  background: var(--coral-light);
+  border-radius: 4px;
+}
+
+.landing-container::-webkit-scrollbar-thumb {
+  background: var(--coral-primary);
+  border-radius: 4px;
+}
+
+.landing-container::-webkit-scrollbar-thumb:hover {
+  background: var(--coral-dark);
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(40px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.landing-close {
+  position: fixed;
+  top: 32px;
+  right: 32px;
+  width: 56px;
+  height: 56px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 2px solid var(--coral-light);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  z-index: 1000;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+}
+
+.landing-close:hover {
+  background: var(--coral-primary);
+  transform: rotate(90deg) scale(1.1);
+  box-shadow: var(--coral-shadow);
+}
+
+.landing-close svg {
+  color: var(--coral-dark);
+  transition: color 0.3s ease;
+}
+
+.landing-close:hover svg {
+  color: white;
+}
+.main-hero {
+  text-align: center;
+  padding: 80px 20px 60px;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.hero-icon-animation {
+  position: relative;
+  display: inline-block;
+  margin-bottom: 30px;
+}
+
+.walking-icon {
+  font-size: 80px;
+  animation: walk 2s infinite;
+  position: relative;
+  z-index: 2;
+}
+
+.icon-trail {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 100px;
+  height: 100px;
+  background: radial-gradient(circle, var(--coral-primary) 0%, transparent 70%);
+  opacity: 0.3;
+  border-radius: 50%;
+  animation: pulse 2s infinite;
+}
+
+@keyframes walk {
+  0%, 100% { transform: translateX(0) rotate(0deg); }
+  25% { transform: translateX(10px) rotate(5deg); }
+  50% { transform: translateX(0) rotate(0deg); }
+  75% { transform: translateX(-10px) rotate(-5deg); }
+}
+
+@keyframes pulse {
+  0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.3; }
+  50% { transform: translate(-50%, -50%) scale(1.1); opacity: 0.5; }
+}
+
+.hero-title {
+  margin-bottom: 20px;
+}
+
+.title-gradient {
+  font-size: 4.5rem;
+  font-weight: 900;
+  background: var(--coral-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  line-height: 1.1;
+  display: block;
+}
+
+.title-sub {
+  font-size: 1.5rem;
+  color: var(--text-light);
+  font-weight: 400;
+  display: block;
+  margin-top: 10px;
+}
+
+.hero-description {
+  font-size: 1.3rem;
+  line-height: 1.6;
+  color: var(--text-light);
+  max-width: 700px;
+  margin: 0 auto 40px;
+}
+
+.hero-cta {
+  margin-top: 50px;
+}
+
+.hero-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 15px;
+  background: var(--coral-gradient);
+  color: white;
+  border: none;
+  padding: 22px 50px;
+  border-radius: 16px;
+  font-size: 1.4rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+  box-shadow: var(--coral-shadow);
+  margin-bottom: 20px;
+}
+
+.coral-glow-btn {
+  animation: glow 2s infinite alternate;
+}
+
+@keyframes glow {
+  from { box-shadow: var(--coral-shadow); }
+  to { box-shadow: 0 0 60px rgba(255, 127, 127, 0.6); }
+}
+
+.btn-wave {
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+  transition: left 0.7s ease;
+}
+
+.hero-btn:hover .btn-wave {
+  left: 100%;
+}
+
+.hero-btn:hover {
+  transform: translateY(-5px) scale(1.05);
+}
+
+.cta-hint {
+  color: var(--text-light);
+  font-size: 0.9rem;
+  font-style: italic;
+}
+.quick-start {
+  padding: 80px 20px;
+  background: rgba(255, 255, 255, 0.7);
+  border-radius: 32px;
+  margin: 40px 0;
+}
+
+.section-header {
+  text-align: center;
+  margin-bottom: 60px;
+}
+
+.section-title {
+  font-size: 2.8rem;
+  font-weight: 800;
+  color: var(--text-dark);
+  margin-bottom: 16px;
+}
+
+.section-subtitle {
+  font-size: 1.2rem;
+  color: var(--text-light);
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.quick-steps {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 30px;
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+.step-card {
+  background: white;
+  border-radius: 20px;
+  padding: 40px 30px;
+  text-align: center;
+  transition: all 0.3s ease;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.05);
+  border: 2px solid transparent;
+  position: relative;
+  overflow: hidden;
+}
+
+.step-card:hover {
+  transform: translateY(-10px);
+  border-color: var(--coral-primary);
+  box-shadow: var(--coral-shadow);
+}
+
+.step-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 4px;
+  background: var(--coral-gradient);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.3s ease;
+}
+
+.step-card:hover::before {
+  transform: scaleX(1);
+}
+
+.step-number {
+  width: 50px;
+  height: 50px;
+  background: var(--coral-gradient);
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin: 0 auto 20px;
+}
+
+.step-icon {
+  font-size: 48px;
+  margin-bottom: 20px;
+}
+
+.step-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-dark);
+  margin-bottom: 15px;
+}
+
+.step-description {
+  color: var(--text-light);
+  line-height: 1.5;
+}
+.site-integration {
+  padding: 80px 20px;
+  background: rgba(255, 255, 255, 0.7);
+  border-radius: 32px;
+  margin: 40px 0;
+}
+
+.integration-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 30px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.integration-card {
+  background: white;
+  border-radius: 20px;
+  padding: 40px 30px;
+  text-decoration: none;
+  color: var(--text-dark);
+  transition: all 0.3s ease;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.05);
+  border: 2px solid transparent;
+  display: block;
+  text-align: center;
+}
+
+.integration-card:hover {
+  transform: translateY(-10px);
+  border-color: var(--coral-primary);
+  box-shadow: var(--coral-shadow);
+}
+
+.card-icon {
+  font-size: 48px;
+  margin-bottom: 20px;
+}
+
+.integration-card h3 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-bottom: 15px;
+}
+
+.integration-card p {
+  color: var(--text-light);
+  line-height: 1.5;
+  margin-bottom: 20px;
+}
+
+.card-link {
+  color: var(--coral-primary);
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.landing-footer {
+  padding: 60px 20px 40px;
+  background: white;
+  border-radius: 32px;
+  margin-top: 40px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.05);
+}
+
+.footer-content {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.footer-logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 15px;
+  margin-bottom: 40px;
+}
+
+.logo-icon {
+  font-size: 2.5rem;
+}
+
+.logo-text {
+  font-size: 2rem;
+  font-weight: 800;
+  color: var(--text-dark);
+}
+
+.footer-info {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 40px;
+  margin-bottom: 40px;
+  padding-bottom: 40px;
+  border-bottom: 2px solid var(--coral-light);
+}
+
+.info-section h4 {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--text-dark);
+  margin-bottom: 20px;
+}
+
+.info-section a {
+  color: var(--coral-primary);
+  text-decoration: none;
+  transition: color 0.3s ease;
+}
+
+.info-section a:hover {
+  color: var(--coral-dark);
+  text-decoration: underline;
+}
+
+.data-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.status-dot.live {
+  background: #4CAF50;
+  animation: live-pulse 2s infinite;
+}
+
+.footer-links {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.footer-links li {
+  margin-bottom: 10px;
+}
+
+.footer-copyright {
+  text-align: center;
+  color: var(--text-light);
+}
+
+.footer-copyright p {
+  margin-bottom: 10px;
+}
+
+.footer-note {
+  font-size: 0.9rem;
+  font-style: italic;
+  color: var(--coral-dark);
+}
+@media (max-width: 1024px) {
+  .quick-steps,
+  .integration-grid,
+  .footer-info {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .title-gradient {
+    font-size: 3.5rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .quick-steps,
+  .integration-grid,
+  .footer-info {
+    grid-template-columns: 1fr;
+  }
+  
+  .title-gradient {
+    font-size: 2.8rem;
+  }
+  
+  .section-title {
+    font-size: 2.2rem;
+  }
+  
+  .hero-btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .landing-close {
+    top: 20px;
+    right: 20px;
+    width: 48px;
+    height: 48px;
+  }
+  
+  .main-hero {
+    padding: 60px 10px 40px;
+  }
+  
+  .title-gradient {
+    font-size: 2.2rem;
+  }
+  
+  .title-sub {
+    font-size: 1.2rem;
+  }
+  
+  .hero-description {
+    font-size: 1.1rem;
+  }
+  
+  .section-header {
+    margin-bottom: 40px;
+  }
+}
+</style>
+
+<script>
+function updateDataTimestamp() {
+  const timestamp = document.getElementById('dataTimestamp');
+  const now = new Date();
+  const today = new Date();
+  if (now.toDateString() === today.toDateString()) {
+    timestamp.textContent = 'сегодня в ' + now.toLocaleTimeString('ru-RU', { 
+      hour: '2-digit', 
+      minute: '2-digit' 
+    });
+  } else {
+    timestamp.textContent = now.toLocaleDateString('ru-RU', {
+      day: 'numeric',
+      month: 'long',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  }
+}
+
+function initLandingCard() {
+  updateDataTimestamp();
+  setInterval(updateDataTimestamp, 60000); 
+  const startExploringBtn = document.getElementById('startExploringBtn');
+  if (startExploringBtn) {
+    startExploringBtn.addEventListener('click', function(e) {
+      e.preventDefault();
+      this.style.transform = 'scale(0.95)';
+      setTimeout(() => {
+        this.style.transform = '';
+      }, 200);
+      hideLandingCard();
+      setTimeout(() => {
+        window.location.href = '/index.html';
+      }, 800);
+    });
+  }
+  document.querySelectorAll('.integration-card').forEach(card => {
+    card.addEventListener('click', function(e) {
+      const page = this.getAttribute('data-page');
+      hideLandingCard();
+      setTimeout(() => {
+        window.location.href = this.href;
+      }, 800);
+    });
+  });
+}
+function showLandingCard() {
+  const landingOverlay = document.getElementById('landingOverlay');
+  if (!landingOverlay) return;
+  
+  landingOverlay.style.display = 'block';
+  setTimeout(() => {
+    landingOverlay.classList.remove('hidden');
+    initLandingCard();
+  }, 10);
+}
+function hideLandingCard() {
+  const landingOverlay = document.getElementById('landingOverlay');
+  if (!landingOverlay) return;
+  
+  landingOverlay.classList.add('hidden');
+  setTimeout(() => {
+    landingOverlay.style.display = 'none';
+  }, 800);
+}
+document.addEventListener('DOMContentLoaded', function() {
+  const style = document.createElement('style');
+  style.textContent = `
+    @keyframes live-pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+  `;
+  document.head.appendChild(style);
+  const landingOverlay = document.getElementById('landingOverlay');
+  if (landingOverlay && landingOverlay.style.display !== 'none') {
+    initLandingCard();
+  }
+});
+
+window.showLandingCard = showLandingCard;
+window.hideLandingCard = hideLandingCard;
+</script>
+</html>
