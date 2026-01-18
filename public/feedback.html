@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Обратная связь</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="js/init-landing.js" defer></script>
+</head>
+
+<body>
+
+<header class="app-header">
+  <div class="logo">МойМаршрут</div>
+  <nav id="nav"></nav>
+</header>
+
+<div class="container feedback-container">
+  <h2>Обратная связь</h2>
+  <div id="feedbackContainer">
+
+    <form id="feedbackForm">
+      <div id="guestFields" style="display:none;">
+        <input type="text" name="name" placeholder="Ваше имя">
+        <input type="email" name="email" placeholder="Email для ответа">
+      </div>
+
+      <select name="type" required>
+        <option value="жалоба">Жалоба</option>
+        <option value="предложение">Предложение</option>
+        <option value="благодарность">Благодарность</option>
+        <option value="вопрос">Вопрос</option>
+        <option value="ошибка">Ошибка</option>
+        <option value="другое">Другое</option>
+      </select>
+
+      <textarea name="message" placeholder="Опишите ваше обращение" required></textarea>
+
+      <input type="file" name="files[]" multiple accept="image/*,.pdf">
+
+      <button type="submit">Отправить</button>
+    </form>
+
+    <div id="feedbackNavigation" style="display:flex; gap:10px; margin-top: 20px;">
+      <button id="newFeedbackBtn" class="button" style="display:none;">Новое обращение</button>
+      <button id="myFeedbacksBtn" class="button" style="display:none;">Мои обращения</button>
+    </div>
+
+    <div id="feedbacksList" style="display:none; margin-top: 20px;"></div>
+  </div>
+</div>
+
+<script>
+function getGreeting() {
+  const hour = new Date().getHours();
+  if (hour >= 5 && hour < 12) return 'Доброе утро';
+  if (hour >= 12 && hour < 17) return 'Добрый день';
+  if (hour >= 17 && hour < 23) return 'Добрый вечер';
+  return 'Доброй ночи';
+}
+
+function initHeader() {
+  fetch('/api/me.php')
+    .then(r => {
+      if (!r.ok) throw new Error();
+      return r.json();
+    })
+    .then(user => {
+      let adminLinks = '';
+      if (user.role === 'admin') {
+        adminLinks = `
+          <div class="admin-dropdown">
+            <button class="admin-dropbtn">
+              Админ
+              <span class="admin-badge">⚙️</span>
+            </button>
+            <div class="admin-dropdown-content">
+              <a href="/admin/zones.html" class="nav-link">Зоны ремонта</a>
+              <a href="/admin/users.html" class="nav-link">Пользователи</a>
+              <a href="/admin/feedback.html" class="nav-link">Обратная связь</a>
+              <a href="/admin/broadcast.html" class="nav-link">Рассылка</a>
+            </div>
+          </div>
+        `;
+      }
+      
+
+      document.getElementById('nav').innerHTML = `
+        <span class="greeting">${getGreeting()}, ${user.nickname || user.email}</span>
+        <a href="/index.html" class="nav-link">Карта</a>
+        <a href="/notifications.html" class="nav-link">Уведомления</a>
+        <a href="/feedback.html" class="nav-link active">Обратная связь</a>
+        <a href="/profile.html" class="nav-link">Профиль</a>
+        ${adminLinks}
+        <a href="/api/logout.php" class="nav-link">Выход</a>
+      `;
+    })
+    .catch(() => {
+      document.getElementById('nav').innerHTML = `
+        <a href="/index.html" class="nav-link">Карта</a>
+        <a href="/login.html" class="nav-link">Вход</a>
+        <a href="/register.html" class="nav-link">Регистрация</a>
+        <a href="/feedback.html" class="nav-link active">Обратная связь</a>
+      `;
+      document.getElementById('guestFields').style.display = 'block';
+    });
+}
+
+initHeader();
+
+async function getUserInfo() {
+  try {
+    const res = await fetch('/api/me.php');
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch (e) {
+    console.error('Не удалось получить информацию о пользователе:', e);
+  }
+  return null;
+}
+
+document.getElementById('feedbackForm').addEventListener('submit', async e => {
+  e.preventDefault();
+
+  const formData = new FormData(e.target);
+
+  try {
+    const res = await fetch('/api/feedback.php', {
+      method: 'POST',
+      body: formData
+    });
+
+    const text = await res.text();
+    console.log('RAW FEEDBACK RESPONSE:', text);
+
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      showError('Сервер вернул ошибку. Сообщение не отправлено.');
+      return;
+    }
+
+    if (!res.ok || data.success === false) {
+      showError(data.error || 'Ошибка отправки');
+      return;
+    }
+
+    showSuccess('Спасибо! Сообщение отправлено. ID вашего обращения: ' + data.id);
+    
+    const user = await getUserInfo();
+    if (!user) {
+      const guestEmail = formData.get('email');
+      if (guestEmail) {
+        sessionStorage.setItem('guest_feedback_email', guestEmail);
+        
+        await fetch('/api/save-guest-email.php', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ email: guestEmail })
+        });
+      }
+      
+      const guestFeedbacks = JSON.parse(sessionStorage.getItem('guest_feedbacks') || '[]');
+      guestFeedbacks.push(data.id);
+      sessionStorage.setItem('guest_feedbacks', JSON.stringify(guestFeedbacks));
+      
+      await fetch('/api/save-guest-feedback.php', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ feedback_id: data.id })
+      });
+    }
+    
+    window.location.href = `/feedback.html?id=${data.id}`;
+
+  } catch (err) {
+    console.error(err);
+    showError('Ошибка соединения с сервером');
+  }
+});
+</script>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const params = new URLSearchParams(window.location.search);
+  const feedbackId = params.get('id');
+
+  const container = document.getElementById('feedbackContainer');
+  const form = document.getElementById('feedbackForm');
+  const feedbacksList = document.getElementById('feedbacksList');
+  const newFeedbackBtn = document.getElementById('newFeedbackBtn');
+  const myFeedbacksBtn = document.getElementById('myFeedbacksBtn');
+  const feedbackNavigation = document.getElementById('feedbackNavigation');
+
+  const escapeHtml = (text) => {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  };
+
+  function showForm() {
+    form.style.display = 'block';
+    feedbacksList.style.display = 'none';
+    feedbackNavigation.style.display = 'flex';
+    newFeedbackBtn.style.display = 'none';
+    myFeedbacksBtn.style.display = 'inline-block';
+    
+    const existingView = container.querySelector('.feedback-view');
+    if (existingView) {
+      existingView.remove();
+    }
+    
+    if (!window.location.search.includes('id=')) {
+      window.history.replaceState({}, document.title, '/feedback.html');
+    }
+  }
+
+  async function loadMyFeedbacks() {
+    try {
+      const res = await fetch('/api/my-feedbacks.php');
+      if (!res.ok) {
+        throw new Error('Не удалось загрузить список обращений');
+      }
+      const data = await res.json();
+
+      form.style.display = 'none';
+      feedbackNavigation.style.display = 'flex';
+      newFeedbackBtn.style.display = 'inline-block';
+      myFeedbacksBtn.style.display = 'none';
+      feedbacksList.style.display = 'block';
+
+      const existingView = container.querySelector('.feedback-view');
+      if (existingView) {
+        existingView.remove();
+      }
+
+      if (!data || data.length === 0) {
+        feedbacksList.innerHTML = `
+          <div class="no-feedbacks">
+            <p>У вас пока нет обращений</p>
+            <button onclick="showForm()" class="button">Создать обращение</button>
+          </div>
+        `;
+        return;
+      }
+      let html = `
+        <h3>Мои обращения</h3>
+        <table class="feedbacks-table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Тип</th>
+              <th>Сообщение</th>
+              <th>Дата</th>
+              <th>Статус</th>
+              <th>Действия</th>
+            </tr>
+          </thead>
+          <tbody>
+      `;
+
+      data.forEach(feedback => {
+        const messagePreview = feedback.message.length > 50 
+          ? feedback.message.substring(0, 50) + '...' 
+          : feedback.message;
+        
+        const status = feedback.admin_reply ? 'Отвечено' : 'Ожидание';
+        const statusClass = feedback.admin_reply ? 'status-answered' : 'status-pending';
+        
+        html += `
+          <tr>
+            <td>${feedback.id}</td>
+            <td>${escapeHtml(feedback.type)}</td>
+            <td>${escapeHtml(messagePreview)}</td>
+            <td>${new Date(feedback.created_at).toLocaleDateString('ru-RU')}</td>
+            <td><span class="status ${statusClass}">${status}</span></td>
+            <td>
+              <a href="/feedback.html?id=${feedback.id}" class="button small">Просмотреть</a>
+            </td>
+          </tr>
+        `;
+      });
+
+      feedbacksList.innerHTML = html;
+    } catch (err) {
+      console.error('Ошибка загрузки списка обращений:', err);
+      showError('Не удалось загрузить список обращений: ' + err.message);
+      showForm();
+    }
+  }
+  async function loadFeedback(feedbackId) {
+    try {
+      const res = await fetch('/api/feedback.php?id=' + feedbackId);
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || 'Ошибка загрузки');
+      }
+      const data = await res.json();
+
+      if (data.error) {
+        showError(data.error);
+        showForm();
+        return;
+      }
+      form.style.display = 'none';
+      feedbacksList.style.display = 'none';
+      feedbackNavigation.style.display = 'none';
+      const existingView = container.querySelector('.feedback-view');
+      if (existingView) {
+        existingView.remove();
+      }
+      let html = `
+        <div class="feedback-view">
+          <h3>Ваше обращение</h3>
+          <p><strong>Тип:</strong> ${escapeHtml(data.type)}</p>
+          <p><strong>Сообщение:</strong><br>${escapeHtml(data.message)}</p>
+      `;
+
+      if (data.admin_reply) {
+        html += `
+          <hr>
+          <h3>Ответ администратора</h3>
+          <div class="admin-reply">
+            ${escapeHtml(data.admin_reply)}
+          </div>
+        `;
+      } else {
+        html += '<p><em>Ответ пока не получен</em></p>';
+      }
+
+      if (data.files && data.files.length > 0) {
+        html += `
+          <hr>
+          <h3>Прикреплённые файлы</h3>
+          <div class="feedback-files">
+        `;
+        
+        data.files.forEach(file => {
+          let fileName, fileUrl;
+          
+          if (typeof file === 'string') {
+            fileName = file.split('/').pop();
+            fileUrl = file;
+          } else if (file && typeof file === 'object') {
+            fileName = file.name || (file.url ? file.url.split('/').pop() : 'Файл');
+            fileUrl = file.url || file.path || file;
+          } else {
+            fileName = 'Файл';
+            fileUrl = '#';
+          }
+          
+          html += `
+            <div class="feedback-file">
+              <a href="${fileUrl}" target="_blank" download="${fileName}">
+                📎 ${escapeHtml(fileName)}
+              </a>
+            </div>
+          `;
+        });
+        
+        html += '</div>';
+      }
+      html += `
+        <div style="margin-top: 20px; display: flex; gap: 10px;">
+          <button id="backToFormBtn" class="button">Новое обращение</button>
+          <button id="backToListBtn" class="button">Мои обращения</button>
+        </div>
+      </div>
+      `;
+
+      const view = document.createElement('div');
+      view.innerHTML = html;
+      container.appendChild(view);
+
+      document.getElementById('backToFormBtn').addEventListener('click', showForm);
+      document.getElementById('backToListBtn').addEventListener('click', loadMyFeedbacks);
+    } catch (err) {
+      console.error('Ошибка загрузки:', err);
+      showError('Не удалось загрузить обращение: ' + err.message);
+      showForm();
+    }
+  }
+  newFeedbackBtn.addEventListener('click', showForm);
+  myFeedbacksBtn.addEventListener('click', loadMyFeedbacks);
+
+  fetch('/api/me.php')
+    .then(r => {
+      if (r.ok) {
+        return r.json().then(user => {
+          if (user) {
+            myFeedbacksBtn.style.display = 'inline-block';
+          }
+        });
+      }
+    })
+    .catch(() => {
+    });
+
+  if (feedbackId) {
+    loadFeedback(feedbackId);
+  } else {
+    showForm();
+  }
+});
+</script>
+
+
+<script>
+function showAlert(message, type = 'info', title = null, duration = 10000) {
+  const alertId = 'alert-' + Date.now();
+  const alert = document.createElement('div');
+  alert.id = alertId;
+  alert.className = `alert alert-${type}`;
+  
+  const icons = {
+    success: '✅',
+    error: '❌',
+    warning: '⚠️',
+    info: 'ℹ️'
+  };
+  
+  alert.innerHTML = `
+    <div class="alert-icon">${icons[type] || icons.info}</div>
+    <div class="alert-content">
+      ${title ? `<div class="alert-title">${title}</div>` : ''}
+      <div class="alert-message">${message}</div>
+    </div>
+    <button class="alert-close" onclick="closeAlert('${alertId}')">×</button>
+  `;
+  
+  document.body.appendChild(alert);
+  
+  setTimeout(() => {
+    alert.classList.add('show');
+  }, 5000);
+  
+  const existingAlerts = document.querySelectorAll('.alert.show');
+  existingAlerts.forEach((existingAlert, index) => {
+    if (index > 0) {
+      const translateY = (index + 1) * 10;
+      existingAlert.style.transform = `translateY(${translateY}px)`;
+    }
+  });
+  
+  let timeoutId;
+  if (duration > 1000) {
+    timeoutId = setTimeout(() => {
+      closeAlert(alertId);
+    }, duration);
+  }
+  
+  alert.dataset.timeoutId = timeoutId;
+  
+  alert.addEventListener('mouseenter', () => {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+      alert.dataset.paused = 'true';
+    }
+  });
+  
+  alert.addEventListener('mouseleave', () => {
+    if (alert.dataset.paused === 'true' && duration > 0) {
+      timeoutId = setTimeout(() => {
+        closeAlert(alertId);
+      }, 3000); 
+      alert.dataset.timeoutId = timeoutId;
+      delete alert.dataset.paused;
+    }
+  });
+  
+  return alertId;
+}
+
+function closeAlert(alertId) {
+  const alert = document.getElementById(alertId);
+  if (!alert) return;
+  
+  if (alert.dataset.timeoutId) {
+    clearTimeout(parseInt(alert.dataset.timeoutId));
+  }
+  
+  alert.classList.remove('show');
+  alert.classList.add('hiding');
+  
+  setTimeout(() => {
+    if (alert.parentNode) {
+      alert.remove();
+      
+      const remainingAlerts = document.querySelectorAll('.alert.show');
+      remainingAlerts.forEach((alert, index) => {
+        const translateY = index * 10;
+        alert.style.transform = `translateY(${translateY}px)`;
+      });
+    }
+  }, 800); 
+}
+
+window.originalAlert = window.alert;
+window.alert = function(message, type = 'info') {
+  showAlert(message, type === 'error' ? 'error' : 'info', '', 1000000);
+};
+
+function showSuccess(message, title = 'Успешно') {
+  return showAlert(message, 'success', title, 1000000); 
+}
+
+function showError(message, title = 'Ошибка') {
+  return showAlert(message, 'error', title, 1000000); 
+}
+
+function showWarning(message, title = 'Внимание') {
+  return showAlert(message, 'warning', title, 1000000); 
+}
+
+function showInfo(message, title = 'Информация') {
+  return showAlert(message, 'info', title, 1000000); 
+}
+</script>
+
+
+</body>
+</html>
