@@ -1,0 +1,633 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>Регистрация</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://api-maps.yandex.ru/2.1/?apikey=9f0428a7-7d03-4225-b272-0d138349ff59&lang=ru_RU"></script>
+  
+  <script src="js/init-landing.js" defer></script> 
+  <style>
+    .custom-alert {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: white;
+      border-radius: 8px;
+      padding: 15px 20px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      z-index: 10001;
+      border-left: 4px solid #4CAF50;
+      animation: slideIn 0.3s ease;
+      max-width: 300px;
+    }
+    
+    .custom-alert.error {
+      border-left-color: #E53935;
+    }
+    
+    @keyframes slideIn {
+      from {
+        transform: translateX(100%);
+        opacity: 0;
+      }
+      to {
+        transform: translateX(0);
+        opacity: 1;
+      }
+    }
+  </style>
+</head>
+<body>
+<div id="footer"></div>
+    <script>
+  fetch('/footer.html')
+    .then(r => r.text())
+    .then(html => {
+      document.getElementById('footer').innerHTML = html;
+      return fetch('js/footer.js');
+    })
+    .then(r => r.text())
+    .then(script => {
+      eval(script);
+      initFooter();
+    })
+    .catch(e => console.error('Ошибка загрузки футера:', e));
+  </script>
+
+  <script>
+fetch('/header.html')
+  .then(r => r.text())
+  .then(html => {
+    document.getElementById('header').innerHTML = html;
+    initHeader('profile'); 
+  });
+
+
+function getGreeting() {
+  const hour = new Date().getHours();
+  if (hour >= 5 && hour < 12) return 'Доброе утро';
+  if (hour >= 12 && hour < 17) return 'Добрый день';
+  if (hour >= 17 && hour < 23) return 'Добрый вечер';
+  return 'Доброй ночи';
+}
+
+function initHeader(activePage) {
+  fetch('/api/me.php')
+    .then(r => {
+      if (!r.ok) throw new Error();
+      return r.json();
+    })
+    .then(user => {
+      const greeting = getGreeting();
+      
+      let adminLinks = '';
+      if (user.role === 'admin') {
+        adminLinks = `
+          <div class="admin-dropdown">
+            <button class="admin-dropbtn">
+              Админ
+              <span class="admin-badge">⚙️</span>
+            </button>
+            <div class="admin-dropdown-content">
+              <a href="/admin/zones.html" class="nav-link">Зоны ремонта</a>
+              <a href="/admin/users.html" class="nav-link">Пользователи</a>
+              <a href="/admin/feedback.html" class="nav-link">Обратная связь</a>
+              <a href="/admin/broadcast.html" class="nav-link">Рассылка</a>
+            </div>
+          </div>
+        `;
+      }
+
+      document.getElementById('nav').innerHTML = `
+        <span class="greeting">${greeting}, ${user.nickname || user.email}</span>
+        <a href="/index.html" class="nav-link">Карта</a>
+        <a href="/notifications.html" class="nav-link">
+          Уведомления
+          ${user.unread_notifications > 0 ? `<span class="notif-badge">${user.unread_notifications}</span>` : ''}
+        </a>
+        <a href="/feedback.html" class="nav-link">Обратная связь</a>
+        <a href="/profile.html" class="nav-link">Профиль</a>
+        ${adminLinks}
+        <a href="/api/logout.php" class="nav-link">Выход</a>
+      `;
+    })
+    .catch(() => {
+      document.getElementById('nav').innerHTML = `
+        <a href="/index.html" class="nav-link">Карта</a>
+        <a href="/login.html" class="nav-link">Вход</a>
+        <a href="/register.html" class="nav-link active">Регистрация</a>
+      `;
+    });
+}
+</script>
+
+<div id="header"></div>
+<script>
+  fetch('/header.html')
+    .then(r => r.text())
+    .then(html => {
+      document.getElementById('header').innerHTML = html;
+      initHeader(); 
+    });
+</script>
+
+<div id="map"></div>
+
+<div class="panel">
+  <div class="panel-header">
+    <span class="panel-title">Регистрация</span>
+  </div>
+
+  <label>Email</label>
+  <input id="email">
+
+  <label>Пароль</label>
+  <input id="password" type="password">
+
+  <label>Никнейм</label>
+  <input id="nickname">
+
+<label>Адрес</label>
+<div class="address-input-wrapper">
+  <input 
+    type="text" 
+    id="address" 
+    name="address" 
+    placeholder="Начните вводить адрес..." 
+    autocomplete="off"
+    required
+  >
+</div>
+
+<div id="address-suggestions" class="suggestions-container" style="display: none;"></div>
+
+<div class="zone-info" id="coordsInfo">
+  Координаты: —
+</div>
+
+  <div style="margin: 20px 0; background: rgba(229, 57, 53, 0.05); padding: 15px; border-radius: 10px; border: 1px solid rgba(229, 57, 53, 0.2);">
+    <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer; margin: 0;">
+      <input type="checkbox" id="agreeCheckbox" required 
+             style="width: 18px; height: 18px; margin-top: 2px; accent-color: #E53935; cursor: pointer;">
+      <span style="font-size: 14px; line-height: 1.4;">
+        <strong>Согласие на обработку персональных данных</strong><br>
+        Я даю согласие на обработку своих персональных данных в соответствии с 
+        <a href="#" onclick="showAgreementModal(); return false;" 
+           style="color: #E53935; text-decoration: underline; font-weight: 500;">
+          Политикой конфиденциальности
+        </a>
+      </span>
+    </label>
+    <div id="checkboxError" style="color: #E53935; font-size: 13px; margin-top: 8px; display: none;">
+      ❌ Вы должны согласиться с обработкой персональных данных
+    </div>
+  </div>
+
+  <button id="btnRegister">Зарегистрироваться</button>
+
+  <div id="agreementModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 10000; align-items: center; justify-content: center; padding: 20px;">
+    <div style="background: white; padding: 30px; border-radius: 12px; max-width: 600px; max-height: 80vh; overflow-y: auto; box-shadow: 0 10px 40px rgba(0,0,0,0.2);">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h3 style="color: #E53935; margin: 0;">Согласие на обработку персональных данных</h3>
+        <button onclick="closeAgreementModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #666;">×</button>
+      </div>
+      
+      <div style="font-size: 14px; line-height: 1.6;">
+        <p><strong>Настоящим я даю согласие на обработку моих персональных данных:</strong></p>
+        
+        <ol style="padding-left: 20px; margin-bottom: 20px;">
+          <li>Адрес электронной почты (e-mail)</li>
+          <li>Никнейм (псевдоним)</li>
+          <li>Адрес места жительства</li>
+          <li>Географические координаты места жительства (широта, долгота)</li>
+        </ol>
+        
+        <p><strong>Цели обработки персональных данных:</strong></p>
+        <ul style="padding-left: 20px; margin-bottom: 20px;">
+          <li>Регистрация и аутентификация на сайте</li>
+          <li>Построение пешеходных маршрутов с учетом ремонтных зон</li>
+          <li>Отображение информации о ремонтных зонах вблизи места проживания</li>
+          <li>Отправка уведомлений о новых функциях и изменениях</li>
+          <li>Обработка обращений через форму обратной связи</li>
+          <li>Улучшение качества предоставляемых услуг</li>
+        </ul>
+        
+        <p><strong>Способы обработки:</strong> автоматизированная обработка, включая сбор, запись, систематизацию, накопление, хранение, уточнение, извлечение, использование, передачу, обезличивание, блокирование, удаление.</p>
+        
+        <p><strong>Срок действия согласия:</strong> до момента отзыва согласия путем удаления учетной записи в настройках профиля или обращения к администрации сайта.</p>
+        
+        <p><strong>Подтверждаю, что:</strong></p>
+        <ul style="padding-left: 20px;">
+          <li>Я ознакомлен(а) с Политикой конфиденциальности</li>
+          <li>Согласие дано добровольно</li>
+          <li>Я понимаю, что могу отозвать согласие в любой момент</li>
+          <li>Я понимаю, что отзыв согласия повлечет удаление учетной записи</li>
+        </ul>
+        
+        <p style="margin-top: 20px; font-size: 12px; color: #666;">
+          <strong>Версия соглашения:</strong> 1.0 от 01.01.2024<br>
+          <strong>Контактная информация:</strong> support@moimar.ru
+        </p>
+      </div>
+      
+      <div style="margin-top: 25px; display: flex; justify-content: flex-end; gap: 10px;">
+        <button onclick="closeAgreementModal()" style="background: #E53935; color: white; border: none; padding: 10px 25px; border-radius: 6px; cursor: pointer; font-weight: 500;">
+          Закрыть
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function showAgreementModal() {
+  document.getElementById('agreementModal').style.display = 'flex';
+  return false;
+}
+
+function closeAgreementModal() {
+  document.getElementById('agreementModal').style.display = 'none';
+}
+
+function showAlert(message, type = 'success', title = '') {
+  const oldAlert = document.querySelector('.custom-alert');
+  if (oldAlert) oldAlert.remove();
+  
+  const alert = document.createElement('div');
+  alert.className = `custom-alert ${type === 'error' ? 'error' : ''}`;
+  alert.innerHTML = `
+    ${title ? `<strong>${title}</strong><br>` : ''}
+    ${message}
+  `;
+  document.body.appendChild(alert);
+  
+  setTimeout(() => {
+    alert.remove();
+  }, type === 'error' ? 5000 : 3000);
+}
+
+async function getUserIP() {
+  try {
+    const response = await fetch('https://api.ipify.org?format=json');
+    const data = await response.json();
+    return data.ip;
+  } catch (error) {
+    console.error('Не удалось получить IP:', error);
+    return 'unknown';
+  }
+}
+
+let map;
+let placemark = null;
+let selectedCoords = null;
+const addressInput = document.getElementById('address');
+const coordsInfo = document.getElementById('coordsInfo');
+const btnRegister = document.getElementById('btnRegister');
+
+ymaps.ready(init);
+
+function init() {
+  map = new ymaps.Map('map', {
+    center: [55.75, 37.61],
+    zoom: 12,
+    controls: ['zoomControl']
+  });
+  map.events.add('click', e => {
+    const coords = e.get('coords');
+    ymaps.geocode(coords).then(res => {
+      const geo = res.geoObjects.get(0);
+      if (geo) {
+        setPoint(coords, geo.getAddressLine());
+      }
+    });
+  });
+
+
+  
+}
+
+
+function showSuggestions(items) {
+  const suggestBox = document.querySelector('.suggest-box');
+  if (suggestBox) suggestBox.remove();
+
+  if (items.length === 0) return;
+
+  const box = document.createElement('div');
+  box.className = 'suggest-box';
+  
+  items.forEach(item => {
+    const div = document.createElement('div');
+    div.className = 'suggest-item';
+    div.textContent = item.displayName;
+    
+    div.onclick = () => {
+      addressInput.value = item.displayName;
+      box.remove();
+      
+      ymaps.geocode(item.displayName).then(res => {
+        const geo = res.geoObjects.get(0);
+        if (geo) {
+          setPoint(geo.geometry.getCoordinates(), item.displayName);
+        }
+      });
+    };
+    
+    box.appendChild(div);
+  });
+  
+  addressInput.parentNode.appendChild(box);
+}
+
+function setPoint(coords, address) {
+  selectedCoords = coords;
+  addressInput.value = address;
+  coordsInfo.textContent = `Координаты: ${coords[0].toFixed(6)}, ${coords[1].toFixed(6)}`;
+  
+  if (!placemark) {
+    placemark = new ymaps.Placemark(coords, {}, {
+      preset: 'islands#redCircleDotIcon'
+    });
+    map.geoObjects.add(placemark);
+  } else {
+    placemark.geometry.setCoordinates(coords);
+  }
+  
+  map.setCenter(coords, 17);
+}
+
+btnRegister.onclick = async () => {
+  const checkbox = document.getElementById('agreeCheckbox');
+  const errorDiv = document.getElementById('checkboxError');
+  
+  if (!checkbox.checked) {
+    errorDiv.style.display = 'block';
+    checkbox.focus();
+    return;
+  }
+  const emailVal = document.getElementById('email').value.trim();
+  const passwordVal = document.getElementById('password').value;
+  const nicknameVal = document.getElementById('nickname').value.trim();
+  
+  if (!emailVal) {
+    showAlert('Введите email', 'Ошибка', 'Ошибка');
+    return;
+  }
+  
+  if (!passwordVal) {
+    showAlert('Введите пароль', 'Ошибка', 'Ошибка');
+    return;
+  }
+  
+  if (passwordVal.length < 6) {
+    showAlert('Пароль должен быть не короче 6 символов', 'Ошибка', 'Ошибка');
+    return;
+  }
+  
+  
+  if (!addressInput.value.trim()) {
+    showAlert('Введите адрес', 'Ошибка', 'Ошибка');
+    return;
+  }
+  
+  if (!selectedCoords) {
+    showAlert('Выберите точку на карте', 'Ошибка', 'Ошибка');
+    return;
+  }
+  
+  const originalText = btnRegister.innerHTML;
+  btnRegister.innerHTML = 'Регистрация...';
+  btnRegister.disabled = true;
+  
+  try {
+    const userIP = await getUserIP();
+    
+    const registrationData = {
+      email: emailVal,
+      password: passwordVal,
+      nickname: nicknameVal,
+      address: addressInput.value.trim(),
+      lat: selectedCoords[0],
+      lon: selectedCoords[1],
+      pd_agreement_accepted: true,
+      pd_agreement_accepted_at: new Date().toISOString(),
+      pd_agreement_accepted_ip: userIP,
+      pd_agreement_version: 1
+    };
+    
+    console.log('Отправка данных:', registrationData);
+    
+    const response = await fetch('/api/register.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(registrationData)
+    });
+    
+    const result = await response.json();
+    
+    if (result.ok) {
+      showSuccess('Регистрация прошла успешно!', 'Успех', 'Успешно');
+      setTimeout(() => {
+        window.location.href = '/profile.html';
+      }, 1500);
+    } else {
+      showAlert(result.error || 'Ошибка регистрации', 'Ошибка', 'Ошибка');
+      btnRegister.innerHTML = originalText;
+      btnRegister.disabled = false;
+    }
+  } catch (error) {
+    console.error('Ошибка:', error);
+    showAlert('Ошибка соединения с сервером', 'Ошибка', 'Ошибка');
+    btnRegister.innerHTML = originalText;
+    btnRegister.disabled = false;
+  }
+};
+
+document.getElementById('agreementModal').addEventListener('click', function(e) {
+  if (e.target === this) closeAgreementModal();
+});
+
+document.querySelectorAll('.panel').forEach(panel => {
+  const header = panel.querySelector('.panel-header');
+  if (!header) return;
+
+  let isDragging = false;
+  let offsetX = 0;
+  let offsetY = 0;
+
+  header.addEventListener('mousedown', e => {
+    isDragging = true;
+    offsetX = e.clientX - panel.offsetLeft;
+    offsetY = e.clientY - panel.offsetTop;
+    panel.style.transition = 'none';
+  });
+
+  document.addEventListener('mousemove', e => {
+    if (!isDragging) return;
+    panel.style.left = `${e.clientX - offsetX}px`;
+    panel.style.top = `${e.clientY - offsetY}px`;
+  });
+
+  document.addEventListener('mouseup', () => {
+    isDragging = false;
+    panel.style.transition = '';
+  });
+});
+</script>
+
+
+<script>
+function showAlert(message, type = 'info', title = null, duration = 5000) {
+  const alertId = 'alert-' + Date.now();
+  const alert = document.createElement('div');
+  alert.id = alertId;
+  alert.className = `alert alert-${type}`;
+  
+  const icons = {
+    success: '✅',
+    error: '❌',
+    warning: '⚠️',
+    info: 'ℹ️'
+  };
+  
+  alert.innerHTML = `
+    <div class="alert-icon">${icons[type] || icons.info}</div>
+    <div class="alert-content">
+      ${title ? `<div class="alert-title">${title}</div>` : ''}
+      <div class="alert-message">${message}</div>
+    </div>
+    <button class="alert-close" onclick="document.getElementById('${alertId}').remove()">×</button>
+  `;
+  
+  document.body.appendChild(alert);
+  
+  setTimeout(() => alert.classList.add('show'), 10);
+ 
+  if (duration > 0) {
+    setTimeout(() => {
+      if (alert.parentNode) {
+        alert.classList.remove('show');
+        setTimeout(() => {
+          if (alert.parentNode) alert.remove();
+        }, 300);
+      }
+    }, duration);
+  }
+  
+  return alertId;
+}
+window.originalAlert = window.alert;
+window.alert = function(message, type = 'info') {
+  showAlert(message, type === 'error' ? 'error' : 'info');
+};
+
+function showSuccess(message, title = 'Успешно') {
+  return showAlert(message, 'success', title);
+}
+function showError(message, title = 'Ошибка') {
+  return showAlert(message, 'error', title);
+}
+function showWarning(message, title = 'Внимание') {
+  return showAlert(message, 'warning', title);
+}
+function showInfo(message, title = 'Информация') {
+  return showAlert(message, 'info', title);
+}
+</script>
+
+
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    function showLandingCard() {
+        window.location.href = '/index.html';
+    }
+    const logos = document.querySelectorAll('.logo, .admin-page-header .logo');
+    logos.forEach(logo => {
+        logo.style.cursor = 'pointer';
+        logo.title = 'Перейти на главную';
+        logo.addEventListener('click', function(e) {
+            e.preventDefault();
+            showLandingCard();
+        });
+    });
+    setTimeout(() => {
+        const logos = document.querySelectorAll('.logo, .admin-page-header .logo');
+        logos.forEach(logo => {
+            if (!logo.hasAttribute('data-click-bound')) {
+                logo.style.cursor = 'pointer';
+                logo.title = 'Перейти на главную';
+                logo.setAttribute('data-click-bound', 'true');
+                logo.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    showLandingCard();
+                });
+            }
+        });
+    }, 1000);
+});
+</script>
+
+
+<script>
+ymaps.ready(() => {
+  const addressInput = document.getElementById('address');
+  if (!addressInput) return;
+  const suggestView = new ymaps.SuggestView('address', {
+    provider: {
+      suggest: (request, options) => {
+        return ymaps.geocode(request, {
+          results: 10,
+          boundedBy: [[55.0, 36.8], [56.2, 38.2]], 
+          strictBounds: true
+        }).then(res => {
+          const items = [];
+          res.geoObjects.each(go => {
+            items.push({
+              displayName: go.getAddressLine(),
+              value: go.getAddressLine(),
+              coords: go.geometry.getCoordinates()
+            });
+          });
+          return items;
+        });
+      }
+    },
+    results: 8,
+    boundedBy: [[55.0, 36.8], [56.2, 38.2]],
+    strictBounds: true
+  });
+  suggestView.events.add('select', (e) => {
+    const item = e.get('item');
+    if (!item) return;
+
+    const selectedAddress = item.value || item.displayName;
+    addressInput.value = selectedAddress;
+    ymaps.geocode(selectedAddress).then(res => {
+      const geo = res.geoObjects.get(0);
+      if (geo) {
+        const coords = geo.geometry.getCoordinates();
+        setPoint(coords, selectedAddress);
+      }
+    });
+  });
+
+  addressInput.addEventListener('blur', () => {
+    const val = addressInput.value.trim();
+    if (val.length < 5) return;
+
+    ymaps.geocode(val).then(res => {
+      const geo = res.geoObjects.get(0);
+      if (geo) {
+        const coords = geo.geometry.getCoordinates();
+        setPoint(coords, geo.getAddressLine());
+      }
+    }).catch(() => {
+    });
+  });
+});
+</script>
+
+</body>
+</html>
