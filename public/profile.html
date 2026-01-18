@@ -1,0 +1,777 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>Профиль</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://api-maps.yandex.ru/2.1/?apikey=9f0428a7-7d03-4225-b272-0d138349ff59&lang=ru_RU"></script>
+</head>
+<body>
+    <div id="map"></div>
+    <div id="map-toast" class="toast"></div>
+    <div id="header"></div>
+    <div class="profile-wrapper">
+      <div class="profile-card">
+
+        <form id="profileForm" enctype="multipart/form-data">
+          <div class="avatar-block">
+            <img id="avatarPreview" src="/img/avatar-placeholder.png">
+            <input type="file" name="avatar" id="avatarInput" accept="image/*">
+          </div>
+
+          <label>Email</label>
+          <input type="email" id="email" disabled>
+
+          <label>Никнейм</label>
+          <input type="text" name="nickname" id="nickname">
+
+          <label>Адрес</label>
+          <input type="text" id="address" name="address" placeholder="Выберите адрес на карте">
+
+          <label>Пол</label>
+          <select name="gender" id="gender">
+            <option value="">Не указан</option>
+            <option value="female">Женский</option>
+            <option value="male">Мужской</option>
+          </select>
+
+          <label>Дата рождения</label>
+          <input type="date" name="birth_date" id="birth_date">
+
+          <label>Новый пароль</label>
+          <input type="password" name="password" autocomplete="new-password">
+
+          <label>Повторите пароль</label>
+          <input type="password" name="password_repeat" autocomplete="new-password">
+
+          <div id="createdAt"></div>
+
+          <div class="profile-actions">
+            <button type="submit">Сохранить</button>
+            <button type="button" id="cancelBtn">Отмена</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+<div id="footer"></div>
+    <script>
+  fetch('/footer.html')
+    .then(r => r.text())
+    .then(html => {
+      document.getElementById('footer').innerHTML = html;
+      return fetch('js/footer.js');
+    })
+    .then(r => r.text())
+    .then(script => {
+      eval(script);
+      initFooter();
+    })
+    .catch(e => console.error('Ошибка загрузки футера:', e));
+  </script>
+    <div id="toast" class="toast"></div>
+
+
+<script>
+fetch('/header.html')
+  .then(r => r.text())
+  .then(html => {
+    document.getElementById('header').innerHTML = html;
+    initHeader('profile'); 
+  });
+
+
+function getGreeting() {
+  const hour = new Date().getHours();
+  if (hour >= 5 && hour < 12) return 'Доброе утро';
+  if (hour >= 12 && hour < 17) return 'Добрый день';
+  if (hour >= 17 && hour < 23) return 'Добрый вечер';
+  return 'Доброй ночи';
+}
+
+function initHeader(activePage) {
+  fetch('/api/me.php')
+    .then(r => {
+      if (!r.ok) throw new Error();
+      return r.json();
+    })
+    .then(user => {
+      const greeting = getGreeting();
+
+      let adminLinks = '';
+      if (user.role === 'admin') {
+        adminLinks = `
+          <div class="admin-dropdown">
+            <button class="admin-dropbtn">
+              Админ
+              <span class="admin-badge">⚙️</span>
+            </button>
+            <div class="admin-dropdown-content">
+              <a href="/admin/zones.html" class="nav-link">Зоны ремонта</a>
+              <a href="/admin/users.html" class="nav-link">Пользователи</a>
+              <a href="/admin/feedback.html" class="nav-link">Обратная связь</a>
+              <a href="/admin/broadcast.html" class="nav-link">Рассылка</a>
+            </div>
+          </div>
+        `;
+      }
+
+      document.getElementById('nav').innerHTML = `
+        <span class="greeting">${greeting}, ${user.nickname || user.email}</span>
+        <a href="/index.html" class="nav-link ${activePage === 'map' ? 'active' : ''}">Карта</a>
+        <a href="/notifications.html" class="nav-link ${activePage === 'notifications' ? 'active' : ''}">
+          Уведомления
+          ${user.unread_notifications > 0 ? `<span class="notif-badge">${user.unread_notifications}</span>` : ''}
+        </a>
+        <a href="/feedback.html" class="nav-link">Обратная связь</a>
+        <a href="/profile.html" class="nav-link ${activePage === 'profile' ? 'active' : ''}">Профиль</a>
+        ${adminLinks}
+        <a href="/api/logout.php" class="nav-link">Выход</a>
+      `;
+    })
+    .catch(() => {
+      document.getElementById('nav').innerHTML = `
+        <a href="/index.html" class="nav-link">Карта</a>
+        <a href="/login.html" class="nav-link">Вход</a>
+        <a href="/register.html" class="nav-link">Регистрация</a>
+      `;
+    });
+}
+</script>
+
+<script>
+function showToast(text, isError = false) {
+  const el = document.getElementById('map-toast') || document.getElementById('toast');
+  if (!el) return;
+  
+  el.textContent = text;
+  el.className = isError ? 'toast error show' : 'toast show';
+  
+  setTimeout(() => {
+    el.classList.remove('show');
+  }, 3000);
+}
+
+let initialProfileState = null;
+let originalFormData = {};
+let selectedCoords = null;
+let map = null;
+let placemark = null;
+
+ymaps.ready(function() {
+  map = new ymaps.Map('map', {
+    center: [55.751244, 37.618423],
+    zoom: 12,
+    controls: ['zoomControl']
+  });
+  map.events.add('click', onMapClick);
+  console.log('Карта инициализирована');
+});
+
+function loadProfile() {
+  fetch('/api/me.php')
+    .then(r => {
+      if (!r.ok) {
+        window.location.href = '/login.html';
+        throw new Error('Not authorized');
+      }
+      return r.json();
+    })
+    .then(user => {
+      console.log('User data loaded:', user);
+      document.getElementById('email').value = user.email || '';
+      document.getElementById('nickname').value = user.nickname || '';
+      document.getElementById('address').value = user.address || '';
+      document.getElementById('gender').value = user.gender || '';
+      document.getElementById('birth_date').value = user.birth_date || '';
+      originalFormData = {
+        nickname: user.nickname || '',
+        address: user.address || '',
+        gender: user.gender || '',
+        birth_date: user.birth_date || '',
+        lat: user.lat || user.latitude || '',
+        lon: user.lon || user.longitude || user.lng || ''
+      };
+      if (user.avatar_path) {
+        document.getElementById('avatarPreview').src = 
+          user.avatar_path.startsWith('http') ? user.avatar_path : location.origin + user.avatar_path;
+      }
+      if (user.created_at) {
+        document.getElementById('createdAt').innerText =
+          'Дата регистрации: ' + new Date(user.created_at).toLocaleDateString('ru-RU');
+      }
+      initialProfileState = {
+        nickname: user.nickname || '',
+        address: user.address || '',
+        gender: user.gender || '',
+        birth_date: user.birth_date || ''
+      };
+      setUserHomePoint(user);
+    })
+    .catch(err => {
+      console.error('Error loading profile:', err);
+    });
+}
+function setUserHomePoint(user) {
+  const lat = user.lat || user.latitude;
+  const lon = user.lon || user.longitude || user.lng;
+  
+  if (lat && lon) {
+    console.log('Устанавливаем точку по координатам:', lat, lon);
+    setHomePoint(lat, lon, 'Мой дом');
+  } else if (user.address) {
+    console.log('Геокодируем адрес:', user.address);
+    geocodeAddress(user.address);
+  } else {
+    console.log('Нет ни координат, ни адреса для установки точки');
+  }
+}
+function geocodeAddress(address) {
+  if (!window.ymaps) {
+    console.error('Yandex Maps API не загружена');
+    return;
+  }
+  
+  ymaps.geocode(address).then(function(res) {
+    const firstGeoObject = res.geoObjects.get(0);
+    if (firstGeoObject) {
+      const coords = firstGeoObject.geometry.getCoordinates();
+      console.log('Координаты получены по адресу:', coords);
+      setHomePoint(coords[0], coords[1], 'Мой дом');
+    } else {
+      console.log('Адрес не найден при геокодировании');
+    }
+  }).catch(function(err) {
+    console.error('Ошибка геокодирования:', err);
+  });
+}
+function setHomePoint(lat, lon, title) {
+  if (!map) {
+    console.error('Карта не инициализирована');
+    return;
+  }
+  if (placemark) {
+    map.geoObjects.remove(placemark);
+  }
+  placemark = new ymaps.Placemark([lat, lon], {
+    balloonContent: title,
+    iconCaption: title
+  }, {
+    preset: 'islands#greenHomeIcon',
+    draggable: true
+  });
+  
+  map.geoObjects.add(placemark);
+  
+  selectedCoords = [lat, lon];
+  map.setCenter([lat, lon], 17);
+  
+  console.log('Метка установлена:', lat, lon, title);
+  
+  placemark.events.add('dragend', function() {
+    const coords = placemark.geometry.getCoordinates();
+    selectedCoords = coords;
+    
+    ymaps.geocode(coords).then(function(res) {
+      const first = res.geoObjects.get(0);
+      if (first) {
+        const address = first.getAddressLine();
+        document.getElementById('address').value = address;
+      }
+    });
+  });
+}
+
+document.addEventListener('DOMContentLoaded', loadProfile);
+
+document.getElementById('profileForm').addEventListener('submit', function (e) {
+  e.preventDefault();
+
+  const currentData = {
+    nickname: document.getElementById('nickname').value,
+    address: document.getElementById('address').value,
+    gender: document.getElementById('gender').value,
+    birth_date: document.getElementById('birth_date').value,
+    lat: selectedCoords ? selectedCoords[0] : '',
+    lon: selectedCoords ? selectedCoords[1] : ''
+  };
+
+  const password = document.querySelector('[name="password"]').value;
+  const passwordRepeat = document.querySelector('[name="password_repeat"]').value;
+  if (password !== passwordRepeat) {
+    showToast('Пароли не совпадают', true);
+    return;
+  }
+  let hasChanges = false;
+  for (let key in currentData) {
+    if (currentData[key] !== originalFormData[key]) {
+      hasChanges = true;
+      break;
+    }
+  }
+  if (password || passwordRepeat) {
+    hasChanges = true;
+  }
+  const avatarInput = document.getElementById('avatarInput');
+  if (avatarInput.files.length > 0) {
+    hasChanges = true;
+  }
+
+  if (!hasChanges) {
+    showToast('Нет изменений для сохранения', false);
+    return;
+  }
+
+  const formData = new FormData(this);
+  if (selectedCoords) {
+    formData.append('lat', selectedCoords[0]);
+    formData.append('lon', selectedCoords[1]);
+  }
+
+  fetch('/api/update_profile.php', {
+    method: 'POST',
+    body: formData
+  })
+    .then(async r => {
+      const text = await r.text();
+      console.log('Server response:', text);
+      try {
+        return JSON.parse(text);
+      } catch (e) {
+        console.error('Failed to parse JSON:', text);
+        return { success: false, error: 'Ошибка сервера' };
+      }
+    })
+    .then(res => {
+      if (res.success) {
+        showToast('Данные успешно сохранены');
+        loadProfile();
+      } else {
+        showToast(res.error || 'Неизвестная ошибка', true);
+      }
+    })
+    .catch(err => {
+      console.error('Error updating profile:', err);
+      showToast('Ошибка соединения с сервером', true);
+    });
+});
+
+document.getElementById('cancelBtn').addEventListener('click', () => {
+  if (!initialProfileState) return;
+
+  document.getElementById('nickname').value = initialProfileState.nickname;
+  document.getElementById('address').value = initialProfileState.address;
+  document.getElementById('gender').value = initialProfileState.gender;
+  document.getElementById('birth_date').value = initialProfileState.birth_date;
+
+  document.querySelector('[name="password"]').value = '';
+  document.querySelector('[name="password_repeat"]').value = '';
+
+  showToast('Изменения отменены');
+});
+document.getElementById('avatarInput').addEventListener('change', function(e) {
+  const file = e.target.files[0];
+  if (file) {
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      document.getElementById('avatarPreview').src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  }
+});
+function onMapClick(e) {
+  if (!map) return;
+  
+  const coords = e.get('coords');
+  fetch('/api/check_yard.php', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      lat: coords[0],
+      lng: coords[1]
+    })
+  })
+  .then(r => r.json())
+  .then(res => {
+    if (!res.inside) {
+      showToast('Выбранная точка не относится к дворовой территории');
+      return;
+    }
+    setHomePoint(coords[0], coords[1], 'Мой дом');
+    ymaps.geocode(coords).then(function(res) {
+      const first = res.geoObjects.get(0);
+      if (first) {
+        const address = first.getAddressLine();
+        document.getElementById('address').value = address;
+      }
+    });
+  })
+  .catch(err => {
+    console.error(err);
+    showToast('Ошибка проверки территории');
+  });
+}
+</script>
+
+<script>
+function makeDraggable(element) {
+  let isDragging = false;
+  let offsetX = 0;
+  let offsetY = 0;
+  
+  const header = element.querySelector('.panel-header') || element.querySelector('.panel-title') || element;
+  
+  header.style.cursor = 'move';
+  
+  header.addEventListener('mousedown', function(e) {
+    isDragging = true;
+    offsetX = e.clientX - element.offsetLeft;
+    offsetY = e.clientY - element.offsetTop;
+    element.style.transition = 'none';
+    element.style.zIndex = '10002';
+    
+    e.preventDefault();
+  });
+  
+  document.addEventListener('mousemove', function(e) {
+    if (!isDragging) return;
+    
+    const x = e.clientX - offsetX;
+    const y = e.clientY - offsetY;
+    const maxX = window.innerWidth - element.offsetWidth;
+    const maxY = window.innerHeight - element.offsetHeight;
+    
+    element.style.left = Math.max(0, Math.min(x, maxX)) + 'px';
+    element.style.top = Math.max(0, Math.min(y, maxY)) + 'px';
+  });
+  
+  document.addEventListener('mouseup', function() {
+    if (isDragging) {
+      isDragging = false;
+      element.style.transition = 'all 0.3s ease';
+      setTimeout(() => {
+        element.style.zIndex = '10001';
+      }, 300);
+    }
+  });
+}
+document.addEventListener('DOMContentLoaded', function() {
+  const profileCard = document.querySelector('.profile-card');
+  if (profileCard) {
+    makeDraggable(profileCard);
+  }
+});
+</script>
+
+
+<script>
+function showAlert(message, type = 'info', title = null, duration = 5000) {
+  const alertId = 'alert-' + Date.now();
+  const alert = document.createElement('div');
+  alert.id = alertId;
+  alert.className = `alert alert-${type}`;
+  
+  const icons = {
+    success: '✅',
+    error: '❌',
+    warning: '⚠️',
+    info: 'ℹ️'
+  };
+  
+  alert.innerHTML = `
+    <div class="alert-icon">${icons[type] || icons.info}</div>
+    <div class="alert-content">
+      ${title ? `<div class="alert-title">${title}</div>` : ''}
+      <div class="alert-message">${message}</div>
+    </div>
+    <button class="alert-close" onclick="document.getElementById('${alertId}').remove()">×</button>
+  `;
+  
+  document.body.appendChild(alert);
+  
+  setTimeout(() => alert.classList.add('show'), 10);
+  
+  if (duration > 0) {
+    setTimeout(() => {
+      if (alert.parentNode) {
+        alert.classList.remove('show');
+        setTimeout(() => {
+          if (alert.parentNode) alert.remove();
+        }, 300);
+      }
+    }, duration);
+  }
+  
+  return alertId;
+}
+window.originalAlert = window.alert;
+window.alert = function(message, type = 'info') {
+  showAlert(message, type === 'error' ? 'error' : 'info');
+};
+function showSuccess(message, title = 'Успешно') {
+  return showAlert(message, 'success', title);
+}
+function showError(message, title = 'Ошибка') {
+  return showAlert(message, 'error', title);
+}
+function showWarning(message, title = 'Внимание') {
+  return showAlert(message, 'warning', title);
+}
+
+function showInfo(message, title = 'Информация') {
+  return showAlert(message, 'info', title);
+}
+</script>
+
+
+<script>
+ymaps.ready(() => {
+  const addressInput = document.getElementById('address');
+  if (!addressInput) return;
+  const suggestView = new ymaps.SuggestView('address', {
+    provider: {
+      suggest: (request, options) => {
+        return ymaps.geocode(request, {
+          results: 10,
+          boundedBy: [[55.0, 36.8], [56.2, 38.2]], // Москва + ближнее Подмосковье
+          strictBounds: true
+        }).then(res => {
+          const items = [];
+          res.geoObjects.each(go => {
+            items.push({
+              displayName: go.getAddressLine(),
+              value: go.getAddressLine(),
+              coords: go.geometry.getCoordinates()
+            });
+          });
+          return items;
+        });
+      }
+    },
+    results: 8,
+    boundedBy: [[55.0, 36.8], [56.2, 38.2]],
+    strictBounds: true
+  });
+  suggestView.events.add('select', (e) => {
+    const item = e.get('item');
+    if (!item) return;
+
+    const selectedAddress = item.value || item.displayName;
+    addressInput.value = selectedAddress;
+    ymaps.geocode(selectedAddress).then(res => {
+      const geo = res.geoObjects.get(0);
+      if (geo) {
+        const coords = geo.geometry.getCoordinates();
+        fetch('/api/check_yard.php', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({
+            lat: coords[0],
+            lng: coords[1]
+          })
+        })
+        .then(r => r.json())
+        .then(res => {
+          if (!res.inside) {
+            showToast('Выбранный адрес не относится к дворовой территории', true);
+            return;
+          }
+          setHomePoint(coords[0], coords[1], selectedAddress);
+          document.getElementById('address').value = selectedAddress;
+          selectedCoords = coords;
+        })
+        .catch(err => {
+          console.error(err);
+          showToast('Ошибка проверки территории', true);
+        });
+      }
+    });
+  });
+  addressInput.addEventListener('blur', () => {
+    const val = addressInput.value.trim();
+    if (val.length < 5) return;
+
+    ymaps.geocode(val).then(res => {
+      const geo = res.geoObjects.get(0);
+      if (geo) {
+        const coords = geo.geometry.getCoordinates();
+        const address = geo.getAddressLine();
+        fetch('/api/check_yard.php', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({
+            lat: coords[0],
+            lng: coords[1]
+          })
+        })
+        .then(r => r.json())
+        .then(res => {
+          if (!res.inside) {
+            showToast('Выбранный адрес не относится к дворовой территории', true);
+            document.getElementById('address').value = '';
+            if (placemark) {
+              map.geoObjects.remove(placemark);
+              placemark = null;
+              selectedCoords = null;
+            }
+            return;
+          }
+          setHomePoint(coords[0], coords[1], address);
+          document.getElementById('address').value = address;
+          selectedCoords = coords;
+        })
+        .catch(err => {
+          console.error(err);
+          showToast('Ошибка проверки территории', true);
+        });
+      }
+    }).catch(() => {
+      showToast('Адрес не найден', true);
+    });
+  });
+});
+
+
+</script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const profileCard = document.querySelector('.profile-card');
+    const mapElement = document.getElementById('map');
+    
+    if (!profileCard || !mapElement) return;
+    const interactiveElements = profileCard.querySelectorAll(
+        'input, select, button, textarea, label, .avatar-block, .profile-actions'
+    );
+    
+    interactiveElements.forEach(el => {
+        el.style.pointerEvents = 'auto';
+        el.style.cursor = 'default';
+        el.style.zIndex = '10001';
+        el.addEventListener('mouseenter', function(e) {
+            e.stopPropagation();
+            mapElement.style.pointerEvents = 'none';
+            document.body.classList.add('profile-card-hover');
+        });
+        
+        el.addEventListener('mouseleave', function(e) {
+            if (!profileCard.matches(':hover')) {
+                mapElement.style.pointerEvents = 'auto';
+                document.body.classList.remove('profile-card-hover');
+            }
+        });
+    });
+    profileCard.addEventListener('mouseenter', function(e) {
+        e.stopPropagation();
+        mapElement.style.pointerEvents = 'none';
+        document.body.classList.add('profile-card-hover');
+    });
+    
+    profileCard.addEventListener('mouseleave', function(e) {
+        mapElement.style.pointerEvents = 'auto';
+        document.body.classList.remove('profile-card-hover');
+    });
+    const header = profileCard.querySelector('.panel-header') || 
+                   profileCard.querySelector('h2') || 
+                   profileCard;
+    
+    header.style.cursor = 'move';
+    makeDraggable(profileCard);
+    
+    console.log('Карта-фикс активирован: элементы профиля теперь кликабельны');
+});
+function makeDraggable(element) {
+  let isDragging = false;
+  let offsetX = 0;
+  let offsetY = 0;
+  
+  const header = element.querySelector('.panel-header') || element;
+  
+  header.addEventListener('mousedown', function(e) {
+    if (e.target.tagName === 'INPUT' || 
+        e.target.tagName === 'SELECT' || 
+        e.target.tagName === 'BUTTON' ||
+        e.target.tagName === 'TEXTAREA') {
+      return;
+    }
+    
+    isDragging = true;
+    offsetX = e.clientX - element.offsetLeft;
+    offsetY = e.clientY - element.offsetTop;
+    element.style.transition = 'none';
+    element.style.zIndex = '10002';
+    document.getElementById('map').style.pointerEvents = 'none';
+    
+    e.preventDefault();
+  });
+  
+  document.addEventListener('mousemove', function(e) {
+    if (!isDragging) return;
+    
+    const x = e.clientX - offsetX;
+    const y = e.clientY - offsetY;
+    
+    const maxX = window.innerWidth - element.offsetWidth;
+    const maxY = window.innerHeight - element.offsetHeight;
+    
+    element.style.left = Math.max(0, Math.min(x, maxX)) + 'px';
+    element.style.top = Math.max(0, Math.min(y, maxY)) + 'px';
+  });
+  
+  document.addEventListener('mouseup', function() {
+    if (isDragging) {
+      isDragging = false;
+      element.style.transition = 'all 0.3s ease';
+      setTimeout(() => {
+        document.getElementById('map').style.pointerEvents = 'auto';
+        element.style.zIndex = '10001';
+      }, 100);
+    }
+  });
+}
+</script>
+
+<script>
+document.addEventListener('focusin', function(e) {
+    if (e.target.closest('.profile-card')) {
+        const map = document.getElementById('map');
+        if (map) {
+            map.style.pointerEvents = 'none';
+        }
+    }
+});
+
+document.addEventListener('focusout', function(e) {
+    if (!e.target.closest('.profile-card')) {
+        const map = document.getElementById('map');
+        if (map) {
+            map.style.pointerEvents = 'auto';
+        }
+    }
+});
+
+window.addEventListener('load', function() {
+    setTimeout(() => {
+        const inputs = document.querySelectorAll('.profile-card input, .profile-card select, .profile-card button');
+        inputs.forEach(input => {
+            input.style.pointerEvents = 'auto';
+            input.style.cursor = 'auto';
+            input.style.zIndex = '10003';
+            input.setAttribute('tabindex', '0');
+        });
+        const map = document.getElementById('map');
+        if (map) {
+            map.style.pointerEvents = 'none';
+        }
+        document.addEventListener('mousemove', function(e) {
+            if (!e.target.closest('.profile-card')) {
+                map.style.pointerEvents = 'auto';
+            }
+        });
+    }, 100);
+});
+</script>
+
+
+</body>
+</html>
