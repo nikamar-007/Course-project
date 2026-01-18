@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>Вход</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="/init-landing.js" defer></script>
+</head>
+<body>
+
+  <div id="footer"></div>
+    <script>
+  fetch('/footer.html')
+    .then(r => r.text())
+    .then(html => {
+      document.getElementById('footer').innerHTML = html;
+      return fetch('/footer.js');
+    })
+    .then(r => r.text())
+    .then(script => {
+      eval(script);
+      initFooter();
+    })
+    .catch(e => console.error('Ошибка загрузки футера:', e));
+  </script>
+  
+    <div id="header"></div>
+<script>
+fetch('/header.html')
+  .then(r => r.text())
+  .then(html => {
+    document.getElementById('header').innerHTML = html;
+    initHeader('login');
+  });
+</script>
+
+    <script>
+    function getGreeting() {
+      const hour = new Date().getHours();
+      if (hour >= 5 && hour < 12) return 'Доброе утро';
+      if (hour >= 12 && hour < 17) return 'Добрый день';
+      if (hour >= 17 && hour < 23) return 'Добрый вечер';
+      return 'Доброй ночи';
+    }
+
+ function initHeader(activePage) {
+  fetch('/api/me.php')
+    .then(r => {
+      if (!r.ok) throw new Error();
+      return r.json();
+    })
+    .then(user => {
+      const greeting = getGreeting();
+
+      let adminLinks = '';
+      if (user.role === 'admin') {
+        adminLinks = `
+          <div class="admin-dropdown">
+            <button class="admin-dropbtn">
+              Админ
+              <span class="admin-badge">⚙️</span>
+            </button>
+            <div class="admin-dropdown-content">
+              <a href="/admin/zones.html" class="nav-link">Зоны ремонта</a>
+              <a href="/admin/users.html" class="nav-link">Пользователи</a>
+              <a href="/admin/feedback.html" class="nav-link">Обратная связь</a>
+              <a href="/admin/broadcast.html" class="nav-link">Рассылка</a>
+            </div>
+          </div>
+        `;
+      }
+
+      document.getElementById('nav').innerHTML = `
+        <span class="greeting">${greeting}, ${user.nickname || user.email}</span>
+        <a href="/index.html" class="nav-link ${activePage === 'map' ? 'active' : ''}">Карта</a>
+        <a href="/notifications.html" class="nav-link ${activePage === 'notifications' ? 'active' : ''}">
+          Уведомления
+          ${user.unread_notifications > 0 ? `<span class="notif-badge">${user.unread_notifications}</span>` : ''}
+        </a>
+        <a href="/feedback.html" class="nav-link ${activePage === 'feedback' ? 'active' : ''}">Обратная связь</a>
+        <a href="/profile.html" class="nav-link ${activePage === 'profile' ? 'active' : ''}">Профиль</a>
+        ${adminLinks}
+        <a href="/api/logout.php" class="nav-link">Выход</a>
+      `;
+    })
+    .catch(() => {
+      document.getElementById('nav').innerHTML = `
+        <a href="/index.html" class="nav-link ${activePage === 'map' ? 'active' : ''}">Карта</a>
+        <a href="/login.html" class="nav-link ${activePage === 'login' ? 'active' : ''}">Вход</a>
+        <a href="/register.html" class="nav-link ${activePage === 'register' ? 'active' : ''}">Регистрация</a>
+      `;
+    });
+}
+    </script>
+
+
+
+<div class="panel panel-center">
+  <div class="panel-header">
+    <span class="panel-title">Вход</span>
+  </div>
+
+  <label>Email</label>
+  <input id="email" placeholder="Ваш email">
+
+  <label>Пароль</label>
+  <input id="password" type="password" placeholder="Ваш пароль">
+
+  <button id="btnLogin">Войти</button>
+  
+  <div style="margin-top: 20px; text-align: center;">
+    <p style="color: var(--text-secondary); font-size: 14px;">
+      Нет аккаунта? <a href="/register.html" style="color: var(--primary-red);">Зарегистрируйтесь</a>
+    </p>
+  </div>
+</div>
+
+<script>
+document.getElementById('btnLogin').onclick = () => {
+  fetch('/api/login.php', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({
+      email: email.value,
+      password: password.value
+    })
+  })
+  .then(r => {
+    if (!r.ok) throw new Error();
+    return r.json();
+  })
+  .then(() => {
+    window.location.href = '/profile.html';
+  })
+  .catch(() =>  showError('Неверный логин или пароль'));
+};
+</script>
+
+  <div id="footer"></div>
+
+  <script>
+  fetch('/footer.html')
+    .then(r => r.text())
+    .then(html => document.getElementById('footer').innerHTML = html);
+  </script>
+  
+
+  <script>
+document.querySelectorAll('.panel').forEach(panel => {
+  const header = panel.querySelector('.panel-header');
+  if (!header) return;
+
+  let isDragging = false;
+  let offsetX = 0;
+  let offsetY = 0;
+
+  header.addEventListener('mousedown', e => {
+    isDragging = true;
+    offsetX = e.clientX - panel.offsetLeft;
+    offsetY = e.clientY - panel.offsetTop;
+    panel.style.transition = 'none';
+  });
+
+  document.addEventListener('mousemove', e => {
+    if (!isDragging) return;
+    panel.style.left = `${e.clientX - offsetX}px`;
+    panel.style.top = `${e.clientY - offsetY}px`;
+  });
+
+  document.addEventListener('mouseup', () => {
+    isDragging = false;
+    panel.style.transition = '';
+  });
+});
+</script>
+
+<script>
+function showAlert(message, type = 'info', title = null, duration = 5000) {
+  const alertId = 'alert-' + Date.now();
+  const alert = document.createElement('div');
+  alert.id = alertId;
+  alert.className = `alert alert-${type}`;
+  
+  const icons = {
+    success: '✅',
+    error: '❌',
+    warning: '⚠️',
+    info: 'ℹ️'
+  };
+  
+  alert.innerHTML = `
+    <div class="alert-icon">${icons[type] || icons.info}</div>
+    <div class="alert-content">
+      ${title ? `<div class="alert-title">${title}</div>` : ''}
+      <div class="alert-message">${message}</div>
+    </div>
+    <button class="alert-close" onclick="document.getElementById('${alertId}').remove()">×</button>
+  `;
+  
+  document.body.appendChild(alert);
+  
+  setTimeout(() => alert.classList.add('show'), 10);
+  
+  if (duration > 0) {
+    setTimeout(() => {
+      if (alert.parentNode) {
+        alert.classList.remove('show');
+        setTimeout(() => {
+          if (alert.parentNode) alert.remove();
+        }, 300);
+      }
+    }, duration);
+  }
+  
+  return alertId;
+}
+window.originalAlert = window.alert;
+window.alert = function(message, type = 'info') {
+  showAlert(message, type === 'error' ? 'error' : 'info');
+};
+function showSuccess(message, title = 'Успешно') {
+  return showAlert(message, 'success', title);
+}
+function showError(message, title = 'Ошибка') {
+  return showAlert(message, 'error', title);
+}
+function showWarning(message, title = 'Внимание') {
+  return showAlert(message, 'warning', title);
+}
+function showInfo(message, title = 'Информация') {
+  return showAlert(message, 'info', title);
+}
+</script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    function showLandingCard() {
+        window.location.href = '/index.html';
+    }
+    const logos = document.querySelectorAll('.logo, .admin-page-header .logo');
+    logos.forEach(logo => {
+        logo.style.cursor = 'pointer';
+        logo.title = 'Перейти на главную';
+        logo.addEventListener('click', function(e) {
+            e.preventDefault();
+            showLandingCard();
+        });
+    });
+    setTimeout(() => {
+        const logos = document.querySelectorAll('.logo, .admin-page-header .logo');
+        logos.forEach(logo => {
+            if (!logo.hasAttribute('data-click-bound')) {
+                logo.style.cursor = 'pointer';
+                logo.title = 'Перейти на главную';
+                logo.setAttribute('data-click-bound', 'true');
+                logo.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    showLandingCard();
+                });
+            }
+        });
+    }, 1000);
+});
+</script>
+</body>
+</html>
