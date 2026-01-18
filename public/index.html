@@ -1,0 +1,1551 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Комфортные пешеходные маршруты</title>
+
+  <link rel="stylesheet" href="style.css">
+  <script src="js/init-landing.js" defer></script>
+  <script src="https://api-maps.yandex.ru/2.1/?apikey=9f0428a7-7d03-4225-b272-0d138349ff59&lang=ru_RU" type="text/javascript"></script>
+</head>
+<body>
+<div class="map-container">
+  <div id="map"></div>
+</div>
+
+<div id="landingCardContainer"></div>
+<script>
+  fetch('/landing-card.html')
+    .then(r => r.text())
+    .then(html => {
+      document.getElementById('landingCardContainer').innerHTML = html;
+    });
+</script>
+
+<div id="header"></div>
+<script>
+fetch('/header.html')
+  .then(r => r.text())
+  .then(html => {
+    document.getElementById('header').innerHTML = html;
+    initHeader('map'); 
+  });
+</script>
+
+<script>
+function getGreeting() {
+  const hour = new Date().getHours();
+  if (hour >= 5 && hour < 12) return 'Доброе утро';
+  if (hour >= 12 && hour < 17) return 'Добрый день';
+  if (hour >= 17 && hour < 23) return 'Добрый вечер';
+  return 'Доброй ночи';
+}
+
+function initHeader(activePage) {
+  console.log('initHeader: начало');
+  fetch('/api/me.php')
+    .then(r => {
+      console.log('Auth status:', r.status);
+      if (r.status === 401) {
+        throw new Error('Not authenticated');
+      }
+      if (!r.ok) throw new Error('Server error');
+      return r.json();
+    })
+    .then(user => {
+      console.log('User data:', user);
+      const greeting = getGreeting();
+
+      let adminLinks = '';
+      if (user.role === 'admin') {
+        adminLinks = `
+          <div class="admin-dropdown">
+            <button class="admin-dropbtn">
+              Админ
+              <span class="admin-badge">⚙️</span>
+            </button>
+            <div class="admin-dropdown-content">
+              <a href="/admin/zones.html" class="nav-link">Зоны ремонта</a>
+              <a href="/admin/users.html" class="nav-link">Пользователи</a>
+              <a href="/admin/feedback.html" class="nav-link">Обратная связь</a>
+              <a href="/admin/broadcast.html" class="nav-link">Рассылка</a>
+            </div>
+          </div>
+        `;
+      }
+
+      const avatarPath = user.avatar_path ? 
+        (user.avatar_path.startsWith('http') ? user.avatar_path : location.origin + user.avatar_path) :
+        '/img/avatar-placeholder.png';
+
+      document.getElementById('nav').innerHTML = `
+        <div class="user-profile-header">
+          <img src="${avatarPath}" alt="Аватар" class="user-avatar" 
+              onerror="this.src='/img/avatar-placeholder.png'">
+          <span class="greeting">${greeting}, ${user.nickname || user.email}</span>
+        </div>
+
+        <a href="/index.html" class="nav-link ${activePage === 'map' ? 'active' : ''}">
+          Карта
+        </a>
+
+        <a href="/notifications.html" class="nav-link ${activePage === 'notifications' ? 'active' : ''}">
+          Уведомления
+          ${user.unread_notifications > 0 ? `
+            <span class="notif-badge">${user.unread_notifications}</span>
+          ` : ''}
+        </a>
+
+        <a href="/feedback.html" class="nav-link">
+          Обратная связь
+        </a>
+
+        <a href="/profile.html" class="nav-link ${activePage === 'profile' ? 'active' : ''}">
+          Профиль
+        </a>
+
+        ${adminLinks}
+
+        <a href="/api/logout.php" class="nav-link">Выход</a>
+      `;
+      
+      isAuthenticated = true;
+      window.userData = user;
+      console.log('initHeader: пользователь авторизован');
+      checkAndShowHomeButton();
+    })
+    .catch((error) => {
+      console.log('initHeader: неавторизован', error);
+      document.getElementById('nav').innerHTML = `
+        <a href="/index.html" class="nav-link ${activePage === 'map' ? 'active' : ''}">
+          Карта
+        </a>
+        <a href="/login.html" class="nav-link">Вход</a>
+        <a href="/register.html" class="nav-link">Регистрация</a>
+      `;
+      isAuthenticated = false;
+      window.userData = null;
+      console.log('initHeader: установлен неавторизованный режим');
+      checkAndShowHomeButton();
+    })
+    .finally(() => {
+      console.log('initHeader: завершено');
+    });
+}
+</script>
+  
+<button id="openPanelBtn">☰</button>
+  
+<button id="myHomeBtn" class="my-home-btn" title="Показать мой дом на карте">
+  <span style="font-size: 12px; margin-right: 3px;">🏠</span> Мой дом
+</button>
+<div class="panel">
+  <div class="panel-header">
+    <span class="panel-title">Построение пешеходного маршрута</span>
+    <button class="close-btn" id="btnClosePanel">×</button>
+  </div>
+
+  <div class="mode-selector">
+    <button id="btnSimpleRoute" class="mode-btn active">Простой маршрут</button>
+    <button id="btnCustomRoute" class="mode-btn">Ручной обход</button>
+  </div>
+  <div id="simpleRoutePanel">
+    <label>Точка А (начало)</label>
+    <input id="addrA" placeholder="Введите адрес или кликните по карте" />
+
+    <label>Точка B (конец)</label>
+    <input id="addrB" placeholder="Введите адрес или кликните по карте" />
+
+    <div class="actions">
+      <button id="btnRoute">Построить маршрут</button>
+      <button id="btnClear" class="btn-yellow">Очистить</button>
+    </div>
+    
+    <div id="routeStats" class="route-stats" style="display: none;">
+      <div class="stat-item">
+        <div class="stat-value" id="routeDistance">0 км</div>
+        <div class="stat-label">Расстояние</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value" id="routeDuration">0 мин</div>
+        <div class="stat-label">Время</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value" id="routeElevation">±0 м</div>
+        <div class="stat-label">Перепад высот</div>
+      </div>
+    </div>
+    
+    <div id="routeWarning" class="route-warning" style="display: none;">
+      <div class="warning-header">
+        ⚠️ ВНИМАНИЕ: На пути есть ремонтные зоны
+      </div>
+      <div class="warning-content" id="warningContent">
+        Маршрут пересекает ремонтные зоны. Это может быть неудобно и опасно.
+      </div>
+      <div class="warning-actions">
+        <button id="btnSwitchToManual" class="warning-btn warning-btn-primary">
+          🗺️ Обойти вручную
+        </button>
+        <button id="btnContinueAnyway" class="warning-btn warning-btn-secondary">
+          ⚡ Продолжить как есть
+        </button>
+      </div>
+    </div>
+    
+    <div id="elevationChart" style="display: none; margin-top: 20px;">
+      <canvas id="elevationCanvas" width="400" height="150"></canvas>
+    </div>
+  </div>
+  <div id="customRoutePanel" style="display: none;">
+    <div class="instructions">
+      <p>1. Начните построение маршрута</p>
+      <p>2. Кликайте по карте для добавления точек обхода</p>
+      <p>3. Проверяйте, что маршрут не пересекает зоны</p>
+    </div>
+
+    <div class="actions">
+      <button id="btnStartManualRoute" class="btn-primary">
+        🗺️ Начать ручной обход
+      </button>
+      <button id="btnCheckRoute" class="btn-yellow" disabled>
+        🔍 Проверить маршрут
+      </button>
+      <button id="btnClearManualRoute" class="btn-yellow">
+        🗑️ Очистить
+      </button>
+    </div>
+
+    <div class="route-points-list">
+      <h4>Точки маршрута:</h4>
+      <div id="manualPointsList"></div>
+    </div>
+    
+    <div id="manualRouteStats" class="route-stats" style="display: none;">
+      <div class="stat-item">
+        <div class="stat-value" id="manualRouteDistance">0 км</div>
+        <div class="stat-label">Расстояние</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value" id="manualRouteDuration">0 мин</div>
+        <div class="stat-label">Время</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value" id="manualRouteElevation">±0 м</div>
+        <div class="stat-label">Перепад высот</div>
+      </div>
+    </div>
+    
+    <div id="manualRouteWarning" class="route-warning" style="display: none;">
+      <div class="warning-header">
+        ⚠️ Маршрут все еще пересекает зоны
+      </div>
+      <div class="warning-content" id="manualWarningContent">
+        Добавьте больше точек обхода, чтобы избежать ремонтных зон.
+      </div>
+      <div class="warning-actions">
+        <button id="btnAddMorePoints" class="warning-btn warning-btn-primary">
+          ➕ Добавить точки обхода
+        </button>
+        <button id="btnFinishManualRoute" class="warning-btn warning-btn-secondary">
+          ✅ Завершить несмотря на зоны
+        </button>
+      </div>
+    </div>
+    
+    <div id="manualElevationChart" style="display: none; margin-top: 20px;">
+      <canvas id="manualElevationCanvas" width="400" height="150"></canvas>
+    </div>
+  </div>
+
+  <button id="btnDrawZone" class="btn-zone">Отметить зону ремонта</button>
+
+  <div id="status">Выберите режим построения маршрута</div>
+
+  <div id="zoneForm" style="display:none; margin-top:20px;">
+    <label>Описание зоны ремонта</label>
+    <textarea id="zoneDescription" placeholder="Опишите проблему..."></textarea>
+    <div class="actions">
+      <button id="btnSaveZone">Сохранить зону</button>
+      <button id="btnCancelZone" class="btn-yellow">Отмена</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let isAuthenticated = false;
+let userHomePlacemark = null;
+let map, multiRouter;
+let pointA = null, pointB = null;
+let currentPolygon = null;
+let routeCheckInterval = null;
+let elevationChart = null;
+let manualElevationChart = null;
+let manualRoutePoints = [];
+let isManualModeActive = false;
+let manualPlacemarks = [];
+let manualRoutePolyline = null;
+let manualRouteYandexRouter = null;
+ymaps.ready(init);
+
+function init() {
+  window.tempClickPlacemark = null;
+  map = new ymaps.Map('map', {
+    center: [55.7558, 37.6173],
+    zoom: 12,
+    controls: ['zoomControl', 'geolocationControl', 'typeSelector', 'fullscreenControl']
+  });
+
+  let mode = 'A';
+  map.events.add('click', (e) => {
+    const coords = e.get('coords');
+
+    if (isManualModeActive) {
+      handleManualPointClick(e);
+      return;
+    }
+
+    if (mode === 'zone' && currentPolygon) {
+      currentPolygon.geometry.getCoordinates()[0].push(coords);
+      currentPolygon.update();
+      return;
+    }
+
+    if (window.tempClickPlacemark) {
+      map.geoObjects.remove(window.tempClickPlacemark);
+    }
+
+    window.tempClickPlacemark = new ymaps.Placemark(coords, {}, {
+      preset: 'islands#blueCircleIcon',
+      iconColor: '#1e88e5'
+    });
+    map.geoObjects.add(window.tempClickPlacemark);
+
+    reverseGeocode(coords, (address) => {
+      if (mode === 'A') {
+        setPoint('A', coords, address);
+        mode = 'B';
+      } else if (mode === 'B') {
+        setPoint('B', coords, address);
+        mode = 'A';
+      }
+      
+      if (window.tempClickPlacemark) {
+        map.geoObjects.remove(window.tempClickPlacemark);
+        window.tempClickPlacemark = null;
+      }
+    });
+  });
+  document.getElementById('btnSimpleRoute').onclick = () => {
+    document.getElementById('simpleRoutePanel').style.display = 'block';
+    document.getElementById('customRoutePanel').style.display = 'none';
+    document.getElementById('btnSimpleRoute').classList.add('active');
+    document.getElementById('btnCustomRoute').classList.remove('active');
+    isManualModeActive = false;
+    updateStatus('Режим: простой маршрут');
+    clearManualRoute();
+  };
+  
+  document.getElementById('btnCustomRoute').onclick = () => {
+    document.getElementById('simpleRoutePanel').style.display = 'none';
+    document.getElementById('customRoutePanel').style.display = 'block';
+    document.getElementById('btnSimpleRoute').classList.remove('active');
+    document.getElementById('btnCustomRoute').classList.add('active');
+    updateStatus('Режим: ручной обход. Нажмите "Начать ручной обход"');
+    clearRouteVisuals();
+  };
+  document.getElementById('btnRoute').onclick = buildSimpleRoute;
+  document.getElementById('btnClear').onclick = clearAll;
+  document.getElementById('btnSwitchToManual').onclick = switchToManualMode;
+  document.getElementById('btnContinueAnyway').onclick = continueAnyway;
+  document.getElementById('btnStartManualRoute').onclick = startManualRoute;
+  document.getElementById('btnCheckRoute').onclick = checkManualRoute;
+  document.getElementById('btnClearManualRoute').onclick = clearManualRoute;
+  document.getElementById('btnAddMorePoints').onclick = () => {
+    updateStatus('Кликайте по карте для добавления точек обхода');
+  };
+  document.getElementById('btnFinishManualRoute').onclick = finishManualRouteAnyway;
+  document.getElementById('myHomeBtn').onclick = showMyHome;
+  document.getElementById('btnDrawZone').onclick = startDrawingZone;
+  document.getElementById('btnSaveZone').onclick = saveZone;
+  document.getElementById('btnCancelZone').onclick = cancelZone;
+
+  loadRepairZones();
+  const openBtn = document.getElementById('openPanelBtn');
+  const closeBtn = document.getElementById('btnClosePanel');
+  const panel = document.querySelector('.panel');
+
+  if (openBtn) {
+    openBtn.style.display = 'none';
+    openBtn.classList.add('hidden');
+  }
+
+  if (panel) {
+    panel.classList.add('initialized');
+  }
+
+  if (openBtn && panel) {
+    openBtn.addEventListener('click', () => {
+      panel.classList.remove('hidden');
+      panel.style.display = 'block';
+      openBtn.style.display = 'none';
+      openBtn.classList.add('hidden');
+    });
+  }
+
+  if (closeBtn && panel) {
+    closeBtn.addEventListener('click', () => {
+      panel.classList.add('hidden');
+      setTimeout(() => {
+        panel.style.display = 'none';
+        if (openBtn) {
+          openBtn.style.display = 'flex';
+          openBtn.classList.remove('hidden');
+        }
+      }, 300);
+    });
+  }
+  initAddressSuggestions();
+  checkAndShowHomeButton();
+}
+async function buildSimpleRoute() {
+  console.log('Построение простого маршрута...');
+  if (!pointA || !pointB) {
+    updateStatus('Установите обе точки!');
+    showToast('Установите обе точки маршрута!', true);
+    return;
+  }
+
+  clearRouteVisuals();
+
+  const start = pointA.geometry.getCoordinates();
+  const end = pointB.geometry.getCoordinates();
+
+  multiRouter = new ymaps.multiRouter.MultiRoute(
+    {
+      referencePoints: [start, end],
+      params: { routingMode: 'pedestrian' }
+    },
+    { 
+      boundsAutoApply: true,
+      routeActiveStrokeWidth: 6,
+      routeActiveStrokeColor: '#1e88e5',
+      routeStrokeWidth: 4,
+      routeStrokeColor: '#666666'
+    }
+  );
+
+  map.geoObjects.add(multiRouter);
+
+  multiRouter.model.events.add('requestsuccess', async () => {
+    console.log('Маршрут успешно построен');
+    const route = multiRouter.getRoutes().get(0);
+    const distance = route.properties.get('distance').text;
+    const duration = route.properties.get('duration').text;
+
+    document.getElementById('routeDistance').textContent = distance;
+    document.getElementById('routeDuration').textContent = duration;
+    document.getElementById('routeStats').style.display = 'flex';
+
+    const routeGeoJSON = extractRouteGeoJSON(route);
+    console.log('Проверка пересечения с ремонтными зонами...');
+    const checkResult = await checkRouteIntersects(routeGeoJSON);
+    console.log('Результат проверки:', checkResult);
+
+    if (checkResult.intersects) {
+      showRouteWarning(checkResult);
+      updateStatus('⚠️ Маршрут пересекает ремонтные зоны!');
+    } else {
+      hideRouteWarning();
+      updateStatus(`Безопасный маршрут построен! ${distance}, ${duration}`);
+      showElevationProfile(route, 'elevationCanvas', 'routeElevation');
+    }
+  });
+
+  multiRouter.model.events.add('requesterror', () => {
+    console.log('Ошибка построения маршрута');
+    updateStatus('Ошибка построения маршрута');
+  });
+}
+
+async function showElevationProfile(route, canvasId, elevationElementId) {
+  try {
+    const coords = [];
+    const paths = route.getPaths();
+    
+    paths.each((path) => {
+      const segments = path.getSegments();
+      segments.each((segment) => {
+        const segmentGeometry = segment.geometry;
+        if (segmentGeometry && segmentGeometry.getCoordinates) {
+          const segmentCoords = segmentGeometry.getCoordinates();
+          if (segmentCoords && Array.isArray(segmentCoords)) {
+            segmentCoords.forEach((coord) => {
+              coords.push(coord);
+            });
+          }
+        }
+      });
+    });
+    const elevationData = generateMockElevationData(coords.length);
+    
+    document.getElementById(canvasId === 'elevationCanvas' ? 'elevationChart' : 'manualElevationChart').style.display = 'block';
+    drawElevationChart(elevationData, canvasId);
+    const elevationDiff = calculateElevationDiff(elevationData);
+    document.getElementById(elevationElementId).textContent = `±${elevationDiff} м`;
+    
+  } catch (error) {
+    console.error('Ошибка построения графика высот:', error);
+  }
+}
+
+function generateMockElevationData(count) {
+  const data = [];
+  let current = 120;
+  
+  for (let i = 0; i < count; i++) {
+    current += (Math.random() - 0.5) * 10;
+    data.push(Math.max(100, Math.min(150, current)));
+  }
+  
+  return data;
+}
+
+function calculateElevationDiff(data) {
+  if (data.length === 0) return 0;
+  
+  let min = data[0];
+  let max = data[0];
+  
+  for (let i = 1; i < data.length; i++) {
+    if (data[i] < min) min = data[i];
+    if (data[i] > max) max = data[i];
+  }
+  
+  return Math.round(max - min);
+}
+
+function drawElevationChart(data, canvasId) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const min = Math.min(...data);
+  const max = Math.max(...data);
+  const range = max - min || 1;
+  ctx.beginPath();
+  ctx.moveTo(20, canvas.height - 20);
+  ctx.lineTo(canvas.width - 20, canvas.height - 20);
+  ctx.strokeStyle = '#666';
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(20, 20);
+  ctx.lineTo(20, canvas.height - 20);
+  ctx.strokeStyle = '#666';
+  ctx.stroke();
+  ctx.beginPath();
+  const stepX = (canvas.width - 40) / (data.length - 1);
+  
+  for (let i = 0; i < data.length; i++) {
+    const x = 20 + i * stepX;
+    const y = canvas.height - 20 - ((data[i] - min) / range) * (canvas.height - 40);
+    
+    if (i === 0) {
+      ctx.moveTo(x, y);
+    } else {
+      ctx.lineTo(x, y);
+    }
+  }
+  
+  ctx.strokeStyle = '#1e88e5';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.fillStyle = '#666';
+  ctx.font = '10px Arial';
+  ctx.fillText(`${min} м`, 5, canvas.height - 15);
+  ctx.fillText(`${max} м`, 5, 25);
+}
+
+function showRouteWarning(checkResult) {
+  const warningDiv = document.getElementById('routeWarning');
+  const warningContent = document.getElementById('warningContent');
+  
+  warningContent.innerHTML = `
+    <p>${checkResult.message}</p>
+    <p>Количество пересечений: <strong>${checkResult.count || 1}</strong></p>
+    <p>Рекомендуем обойти эти зоны для вашей безопасности.</p>
+  `;
+  
+  warningDiv.style.display = 'block';
+}
+
+function hideRouteWarning() {
+  document.getElementById('routeWarning').style.display = 'none';
+}
+
+function switchToManualMode() {
+  document.getElementById('btnCustomRoute').click();
+  startManualRoute();
+  
+  hideRouteWarning();
+  clearRouteVisuals();
+  
+  updateStatus('Режим ручного обхода. Начальная и конечная точки сохранены. Добавляйте промежуточные точки.');
+}
+
+function continueAnyway() {
+  hideRouteWarning();
+  updateStatus('Вы продолжили через ремонтные зоны. Будьте осторожны!');
+  if (multiRouter) {
+    const route = multiRouter.getRoutes().get(0);
+    showElevationProfile(route, 'elevationCanvas', 'routeElevation');
+  }
+}
+function startManualRoute() {
+  if (!pointA || !pointB) {
+    showToast('Сначала установите начальную и конечную точки в простом режиме!', true);
+    document.getElementById('btnSimpleRoute').click();
+    return;
+  }
+  
+  isManualModeActive = true;
+  document.getElementById('btnCheckRoute').disabled = false;
+  updateStatus('Кликайте по карте для добавления точек обхода');
+  
+  clearManualRoute();
+  const startCoords = pointA.geometry.getCoordinates();
+  const endCoords = pointB.geometry.getCoordinates();
+  const startPlacemark = new ymaps.Placemark(startCoords, {
+    balloonContent: 'Начало маршрута'
+  }, {
+    preset: 'islands#redCircleDotIcon',
+    draggable: false
+  });
+  
+  const endPlacemark = new ymaps.Placemark(endCoords, {
+    balloonContent: 'Конец маршрута'
+  }, {
+    preset: 'islands#yellowCircleDotIcon',
+    draggable: false
+  });
+  
+  map.geoObjects.add(startPlacemark);
+  map.geoObjects.add(endPlacemark);
+  manualPlacemarks.push(startPlacemark, endPlacemark);
+  reverseGeocode(startCoords, (startAddress) => {
+    reverseGeocode(endCoords, (endAddress) => {
+      manualRoutePoints = [
+        { coords: startCoords, address: startAddress, type: 'start', placemark: startPlacemark },
+        { coords: endCoords, address: endAddress, type: 'end', placemark: endPlacemark }
+      ];
+      
+      updateManualPointsList();
+      buildManualRouteYandex();
+    });
+  });
+}
+
+function handleManualPointClick(e) {
+  if (!isManualModeActive) return;
+  
+  const coords = e.get('coords');
+  
+  reverseGeocode(coords, (address) => {
+    const placemark = new ymaps.Placemark(coords, {
+      balloonContent: `Промежуточная точка: ${address}`
+    }, {
+      preset: 'islands#blueCircleDotIcon',
+      draggable: true
+    });
+    placemark.events.add('dragend', () => {
+      const newCoords = placemark.geometry.getCoordinates();
+      const pointIndex = manualRoutePoints.findIndex(p => p.placemark === placemark);
+      if (pointIndex !== -1) {
+        manualRoutePoints[pointIndex].coords = newCoords;
+        reverseGeocode(newCoords, (newAddress) => {
+          manualRoutePoints[pointIndex].address = newAddress;
+          updateManualPointsList();
+          buildManualRouteYandex();
+        });
+      }
+    });
+    
+    map.geoObjects.add(placemark);
+    manualPlacemarks.push(placemark);
+    manualRoutePoints.splice(manualRoutePoints.length - 1, 0, {
+      coords: coords,
+      address: address,
+      type: 'intermediate',
+      id: Date.now(),
+      placemark: placemark
+    });
+    
+    updateManualPointsList();
+    buildManualRouteYandex();
+  });
+}
+
+function updateManualPointsList() {
+  const list = document.getElementById('manualPointsList');
+  list.innerHTML = '';
+  
+  manualRoutePoints.forEach((point, index) => {
+    const pointElement = document.createElement('div');
+    pointElement.className = 'point-item';
+    
+    let pointType = '';
+    let icon = '';
+    if (point.type === 'start') {
+      pointType = '🚩 Начало';
+      icon = '🚩';
+    } else if (point.type === 'end') {
+      pointType = '🏁 Конец';
+      icon = '🏁';
+    } else {
+      pointType = `📍 Точка ${index - 1}`;
+      icon = '📍';
+    }
+    
+    pointElement.innerHTML = `
+      <div>
+        <strong>${icon} ${pointType}</strong>
+        <div style="font-size: 12px; color: #666;">${point.address || 'Адрес не определен'}</div>
+      </div>
+      <div class="point-actions">
+        ${point.type === 'intermediate' ? `
+          <button class="point-btn point-btn-up" onclick="movePointUp(${index})">↑</button>
+          <button class="point-btn point-btn-down" onclick="movePointDown(${index})">↓</button>
+          <button class="point-btn point-btn-remove" onclick="removeManualPoint(${index})">×</button>
+        ` : ''}
+      </div>
+    `;
+    list.appendChild(pointElement);
+  });
+}
+
+function movePointUp(index) {
+  if (index <= 1 || index >= manualRoutePoints.length - 1) return;
+  
+  const temp = manualRoutePoints[index];
+  manualRoutePoints[index] = manualRoutePoints[index - 1];
+  manualRoutePoints[index - 1] = temp;
+  
+  updateManualPointsList();
+  buildManualRouteYandex();
+}
+
+function movePointDown(index) {
+  if (index < 1 || index >= manualRoutePoints.length - 2) return;
+  
+  const temp = manualRoutePoints[index];
+  manualRoutePoints[index] = manualRoutePoints[index + 1];
+  manualRoutePoints[index + 1] = temp;
+  
+  updateManualPointsList();
+  buildManualRouteYandex();
+}
+
+function removeManualPoint(index) {
+  if (manualRoutePoints[index].type === 'intermediate') {
+    if (manualRoutePoints[index].placemark) {
+      map.geoObjects.remove(manualRoutePoints[index].placemark);
+      const pmIndex = manualPlacemarks.indexOf(manualRoutePoints[index].placemark);
+      if (pmIndex !== -1) {
+        manualPlacemarks.splice(pmIndex, 1);
+      }
+    }
+    
+    manualRoutePoints.splice(index, 1);
+    updateManualPointsList();
+    buildManualRouteYandex();
+  }
+}
+
+async function buildManualRouteYandex() {
+  if (manualRoutePoints.length < 2) return;
+  
+  if (manualRouteYandexRouter) {
+    map.geoObjects.remove(manualRouteYandexRouter);
+    manualRouteYandexRouter = null;
+  }
+  
+  const referencePoints = manualRoutePoints.map(p => p.coords);
+  
+  manualRouteYandexRouter = new ymaps.multiRouter.MultiRoute(
+    {
+      referencePoints: referencePoints,
+      params: { routingMode: 'pedestrian' }
+    },
+    { 
+      boundsAutoApply: true,
+      routeActiveStrokeWidth: 6,
+      routeActiveStrokeColor: '#4CAF50',
+      routeStrokeWidth: 4,
+      routeStrokeColor: '#388E3C'
+    }
+  );
+
+  map.geoObjects.add(manualRouteYandexRouter);
+
+  manualRouteYandexRouter.model.events.add('requestsuccess', async () => {
+    const route = manualRouteYandexRouter.getRoutes().get(0);
+    const distance = route.properties.get('distance').text;
+    const duration = route.properties.get('duration').text;
+
+    document.getElementById('manualRouteDistance').textContent = distance;
+    document.getElementById('manualRouteDuration').textContent = duration;
+    document.getElementById('manualRouteStats').style.display = 'flex';
+
+    const routeGeoJSON = extractRouteGeoJSON(route);
+    const checkResult = await checkRouteIntersects(routeGeoJSON);
+
+    if (checkResult.intersects) {
+      showManualRouteWarning(checkResult);
+      updateStatus('⚠️ Ручной маршрут пересекает ремонтные зоны!');
+    } else {
+      hideManualRouteWarning();
+      updateStatus(`Безопасный ручной маршрут построен! ${distance}, ${duration}`);
+      
+      showElevationProfile(route, 'manualElevationCanvas', 'manualRouteElevation');
+    }
+  });
+
+  manualRouteYandexRouter.model.events.add('requesterror', () => {
+    updateStatus('Ошибка построения ручного маршрута');
+  });
+}
+
+async function checkManualRoute() {
+  if (!manualRouteYandexRouter) {
+    updateStatus('Сначала постройте ручной маршрут');
+    return;
+  }
+  
+  const route = manualRouteYandexRouter.getRoutes().get(0);
+  const routeGeoJSON = extractRouteGeoJSON(route);
+  const checkResult = await checkRouteIntersects(routeGeoJSON);
+  
+  if (checkResult.intersects) {
+    showManualRouteWarning(checkResult);
+  } else {
+    hideManualRouteWarning();
+    showToast('✅ Маршрут безопасен!');
+    updateStatus('Маршрут безопасен!');
+  }
+  
+  return checkResult;
+}
+
+function showManualRouteWarning(checkResult) {
+  const warningDiv = document.getElementById('manualRouteWarning');
+  const warningContent = document.getElementById('manualWarningContent');
+  
+  warningContent.innerHTML = `
+    <p>${checkResult.message}</p>
+    <p>Количество пересечений: <strong>${checkResult.count || 1}</strong></p>
+    <p>Добавьте больше точек, чтобы обойти ремонтные зоны.</p>
+  `;
+  
+  warningDiv.style.display = 'block';
+}
+
+function hideManualRouteWarning() {
+  document.getElementById('manualRouteWarning').style.display = 'none';
+}
+
+function finishManualRouteAnyway() {
+  hideManualRouteWarning();
+  showToast('Вы завершили ручной маршрут. Будьте осторожны в ремонтных зонах!');
+  updateStatus('Вы завершили ручной маршрут. Будьте осторожны в ремонтных зонах!');
+  
+  if (manualRouteYandexRouter) {
+    const route = manualRouteYandexRouter.getRoutes().get(0);
+    showElevationProfile(route, 'manualElevationCanvas', 'manualRouteElevation');
+  }
+}
+
+function clearManualRoute() {
+  manualRoutePoints = [];
+  
+  manualPlacemarks.forEach(pm => {
+    if (pm && map.geoObjects.indexOf(pm) !== -1) {
+      map.geoObjects.remove(pm);
+    }
+  });
+  manualPlacemarks = [];
+  
+  if (manualRoutePolyline) {
+    map.geoObjects.remove(manualRoutePolyline);
+    manualRoutePolyline = null;
+  }
+  
+  if (manualRouteYandexRouter) {
+    map.geoObjects.remove(manualRouteYandexRouter);
+    manualRouteYandexRouter = null;
+  }
+  
+  document.getElementById('manualPointsList').innerHTML = '';
+  document.getElementById('manualRouteStats').style.display = 'none';
+  document.getElementById('manualRouteWarning').style.display = 'none';
+  document.getElementById('manualElevationChart').style.display = 'none';
+  
+  updateStatus('Ручной маршрут очищен');
+}
+
+async function checkRouteIntersects(routeGeoJSON) {
+  try {
+    console.log('Отправка запроса на проверку маршрута:', routeGeoJSON);
+    const response = await fetch('/api/check_route.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ geometry: routeGeoJSON })
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Network error: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    console.log('Результат проверки маршрута:', data);
+    return data;
+    
+  } catch (error) {
+    console.error('Ошибка проверки маршрута:', error);
+    return {
+      intersects: false,
+      message: 'Ошибка при проверке маршрута'
+    };
+  }
+}
+
+function extractRouteGeoJSON(route) {
+  const coords = [];
+  
+  try {
+    const paths = route.getPaths();
+    if (!paths) {
+      console.warn('Маршрут не содержит путей');
+      return {
+        type: 'LineString',
+        coordinates: coords
+      };
+    }
+    
+    paths.each((path) => {
+      const geometry = path.geometry;
+      if (geometry && geometry.getType() === 'LineString') {
+        const pathCoords = geometry.getCoordinates();
+        if (pathCoords && Array.isArray(pathCoords)) {
+          pathCoords.forEach((coord) => {
+            coords.push([coord[1], coord[0]]);
+          });
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Ошибка извлечения GeoJSON из маршрута:', error);
+  }
+
+  return {
+    type: 'LineString',
+    coordinates: coords
+  };
+}
+
+function clearRouteVisuals() {
+  if (multiRouter) {
+    map.geoObjects.remove(multiRouter);
+    multiRouter = null;
+  }
+  
+  document.getElementById('routeStats').style.display = 'none';
+  document.getElementById('routeWarning').style.display = 'none';
+  document.getElementById('elevationChart').style.display = 'none';
+}
+
+function clearAll() {
+  if (pointA) map.geoObjects.remove(pointA);
+  if (pointB) map.geoObjects.remove(pointB);
+  if (window.tempClickPlacemark) map.geoObjects.remove(window.tempClickPlacemark);
+
+  pointA = pointB = null;
+  window.tempClickPlacemark = null;
+  document.getElementById('addrA').value = '';
+  document.getElementById('addrB').value = '';
+  
+  clearRouteVisuals();
+  clearManualRoute();
+  
+  updateStatus('Карта очищена');
+}
+
+function setPoint(type, coords, address) {
+  const pm = new ymaps.Placemark(coords, {
+    balloonContent: `${type === 'A' ? 'Начало' : 'Конец'}: ${address}`
+  }, {
+    preset: type === 'A' ? 'islands#redCircleDotIcon' : 'islands#yellowCircleDotIcon',
+    draggable: true
+  });
+
+  pm.events.add('dragend', () => {
+    const newCoords = pm.geometry.getCoordinates();
+    reverseGeocode(newCoords, (newAddress) => {
+      if (type === 'A') {
+        document.getElementById('addrA').value = newAddress;
+      } else {
+        document.getElementById('addrB').value = newAddress;
+      }
+      updateStatus(`Точка ${type} перемещена: ${newAddress}`);
+    });
+  });
+
+  if (type === 'A') {
+    if (pointA) map.geoObjects.remove(pointA);
+    pointA = pm;
+    document.getElementById('addrA').value = address;
+  } else {
+    if (pointB) map.geoObjects.remove(pointB);
+    pointB = pm;
+    document.getElementById('addrB').value = address;
+  }
+
+  map.geoObjects.add(pm);
+  updateStatus(`Точка ${type} установлена: ${address}`);
+}
+
+function reverseGeocode(coords, callback) {
+  ymaps.geocode(coords, { results: 1 }).then((res) => {
+    const first = res.geoObjects.get(0);
+    const address = first ? first.getAddressLine() : coords.join(', ');
+    callback(address);
+  }).catch(() => {
+    callback(coords.join(', '));
+  });
+}
+
+function updateStatus(text) {
+  const statusElement = document.getElementById('status');
+  if (statusElement) {
+    statusElement.textContent = text;
+  }
+}
+
+function checkAndShowHomeButton() {
+  const btn = document.getElementById('myHomeBtn');
+  if (!btn) return;
+  
+  if (isAuthenticated && window.userData && window.userData.addres) {
+    btn.style.display = 'block';
+    btn.style.opacity = '1';
+    btn.style.transform = 'translateY(0)';
+  } else {
+    btn.style.display = 'none';
+  }
+}
+
+function showMyHome() {
+  if (!isAuthenticated || !window.userData) {
+    showToast('Пользователь не авторизован', true);
+    return;
+  }
+
+  if (userHomePlacemark) {
+    map.geoObjects.remove(userHomePlacemark);
+  }
+
+  const address = window.userData.addres;
+
+  if (address) {
+    showHomeByAddress(address);
+  } else {
+    showToast('Адрес дома не указан в профиле', true);
+  }
+}
+
+function showHomeByAddress(address) {
+  ymaps.geocode(address).then(function (res) {
+    const firstGeoObject = res.geoObjects.get(0);
+    
+    if (!firstGeoObject) {
+      showToast('Не удалось найти указанный адрес', true);
+      return;
+    }
+
+    const coords = firstGeoObject.geometry.getCoordinates();
+    showHomeByCoords(coords, address);
+    
+  }).catch(function (error) {
+    console.error('Ошибка геокодирования:', error);
+    showToast('Ошибка при поиске адреса', true);
+  });
+}
+
+function showHomeByCoords(coords, address) {
+  userHomePlacemark = new ymaps.Placemark(coords, {
+    balloonContent: `🏠 Мой дом: ${address || 'Адрес не указан'}`,
+    hintContent: 'Мой дом'
+  }, {
+    preset: 'islands#homeIcon',
+    iconColor: '#1e88e5'
+  });
+
+  map.geoObjects.add(userHomePlacemark);
+  map.setCenter(coords, 17, {
+    duration: 1000
+  });
+  
+  setTimeout(() => {
+    if (userHomePlacemark && userHomePlacemark.balloon) {
+      userHomePlacemark.balloon.open();
+    }
+  }, 1200);
+  
+  updateStatus(`Показан ваш дом: ${address}`);
+}
+
+function loadRepairZones() {
+  fetch('/api/repair_zones.php')
+    .then(res => {
+      if (!res.ok) {
+        throw new Error('Network response was not ok');
+      }
+      return res.json();
+    })
+    .then(zones => {
+      const zonesToRemove = [];
+      map.geoObjects.each((geoObject) => {
+        if (geoObject.options && geoObject.options._tags && 
+            geoObject.options._tags.includes('repair_zone')) {
+          zonesToRemove.push(geoObject);
+        }
+      });
+      
+      zonesToRemove.forEach(zone => map.geoObjects.remove(zone));
+      
+      zones.forEach(z => {
+        try {
+          const geo = JSON.parse(z.geometry);
+          const coords = geo.coordinates.map(ring =>
+            ring.map(p => [p[1], p[0]]) 
+          );
+
+          const createdDate = new Date(z.created_at);
+          const formattedDate = createdDate.toLocaleDateString('ru-RU');
+          
+          const lastConfirmedDate = z.last_confirmed_at 
+            ? new Date(z.last_confirmed_at).toLocaleDateString('ru-RU')
+            : 'Никогда';
+
+          const polygon = new ymaps.Polygon(
+            coords,
+            {
+              balloonContent: `
+                <div class="zone-balloon">
+                  <b>${z.confirm_count === 0 ? '⏳ Pending зона' : '🚧 Ремонтная зона'}</b><br>
+                  ${z.description || 'Без описания'}
+
+                  <div style="font-size:12px;color:#666;margin-top:4px;">
+                    Добавлено: ${formattedDate}<br>
+                    ${z.confirm_count > 0 ? `Последнее подтверждение: ${lastConfirmedDate}` : 'Ожидает подтверждения'}
+                  </div>
+
+                  <div style="margin-top:6px;">
+                    Подтверждений: <b>${z.confirm_count}</b>
+                  </div>
+
+                  ${z.is_creator ? `
+                    <div class="zone-info" style="margin-top:6px; color: #2196F3;">
+                      ✨ Вы создатель этой зоны
+                    </div>
+                  ` : z.confirm_count === 0 ? `
+                    <button
+                      onclick="confirmZone(${z.id})"
+                      class="btn-zone"
+                      style="margin-top:6px; background-color: #9E9E9E;">
+                      Подтвердить ремонт
+                    </button>
+                  ` : `
+                    <button
+                      onclick="confirmZone(${z.id})"
+                      class="btn-zone"
+                      style="margin-top:6px;">
+                      Подтвердить ремонт
+                    </button>
+                  `}
+                </div>
+              `
+            },
+            {
+              fillColor: (z.color || '#FF9800') + '55',
+              strokeColor: z.color || '#FF9800',
+              strokeWidth: z.confirm_count === 0 ? 2 : 3,
+              fillOpacity: 0.6,
+              strokeStyle: z.confirm_count === 0 ? 'dash' : 'solid',
+              _tags: ['repair_zone'] 
+            }
+          );
+
+          map.geoObjects.add(polygon);
+
+        } catch (e) {
+          console.error('Ошибка при обработке зоны:', z, e);
+        }
+      });
+
+    })
+    .catch(err => {
+      console.error('Ошибка загрузки зон:', err);
+      showAlert('Не удалось загрузить зоны ремонта', 'error', 'Ошибка');
+    });
+}
+
+function startDrawingZone() {
+  if (!isAuthenticated) {
+    showToast(
+      `Чтобы отметить зону ремонта, необходимо
+       <a href="/login.html">войти</a> или
+      <a href="/register.html">зарегистрироваться</a>.`,
+      true
+    );
+    return;
+  }
+
+  updateStatus('Рисуйте зону: кликайте по карте для вершин. Двойной клик — завершить.');
+  document.getElementById('zoneForm').style.display = 'block';
+
+  currentPolygon = new ymaps.Polygon([], {
+    balloonContent: 'Зона ремонта (в процессе)'
+  }, {
+    fillColor: '#9E9E9E55',
+    strokeColor: '#E53935',
+    strokeWidth: 3,
+    opacity: 0.6
+  });
+
+  map.geoObjects.add(currentPolygon);
+  currentPolygon.editor.startDrawing();
+
+  currentPolygon.events.add('dblclick', () => {
+    currentPolygon.editor.stopDrawing();
+  });
+}
+
+function saveZone() {
+  if (!currentPolygon) return;
+  currentPolygon.editor.stopDrawing();
+
+  const rawCoords = currentPolygon.geometry.getCoordinates();
+  const fixedCoords = rawCoords.map(ring =>
+    ring.map(p => [p[1], p[0]]) 
+  );
+
+  fetch('/api/repair_zones.php', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      geometry: {
+        type: 'Polygon',
+        coordinates: fixedCoords
+      },
+      description:
+        document.getElementById('zoneDescription').value || 'Ремонт'
+    })
+  })
+  .then(res => res.json())
+  .then(() => {
+    updateStatus('Зона сохранена');
+    map.geoObjects.remove(currentPolygon);
+    currentPolygon = null;
+    document.getElementById('zoneForm').style.display = 'none';
+    loadRepairZones();
+    showToast('Зона ремонта успешно сохранена!');
+  })
+  .catch(err => {
+    console.error(err);
+    updateStatus('Ошибка сохранения зоны');
+    showToast('Ошибка сохранения зоны', true);
+  });
+}
+
+function cancelZone() {
+  if (currentPolygon) {
+    map.geoObjects.remove(currentPolygon);
+    currentPolygon = null;
+  }
+  document.getElementById('zoneForm').style.display = 'none';
+  document.getElementById('zoneDescription').value = '';
+  updateStatus('Рисование зоны отменено');
+}
+
+function confirmZone(zoneId) {
+  if (!isAuthenticated) {
+    showToast('Для подтверждения зоны необходимо авторизоваться', true);
+    return;
+  }
+  
+  const formData = new FormData();
+  formData.append('zone_id', zoneId);
+  
+  fetch('/api/confirm_zone.php', {
+    method: 'POST',
+    body: formData
+  })
+  .then(response => {
+    if (!response.ok) {
+      return response.json().then(data => {
+        throw new Error(data.error || 'Ошибка сервера');
+      });
+    }
+    return response.json();
+  })
+  .then(data => {
+    if (data.error) {
+      showToast(data.error, true);
+    } else {
+      showToast(data.message);
+      loadRepairZones();
+    }
+  })
+  .catch(error => {
+    console.error('Ошибка подтверждения зоны:', error);
+    showToast(error.message, true);
+  });
+}
+
+function initAddressSuggestions() {
+  ymaps.ready(() => {
+    try {
+      new ymaps.SuggestView('addrA', {
+        provider: {
+          suggest: (request, options) => {
+            return ymaps.geocode(request, {
+              results: 12,
+              boundedBy: [[55.10, 36.50], [56.50, 38.50]],
+              strictBounds: true
+            }).then(res => {
+              const items = [];
+              res.geoObjects.each(go => {
+                items.push({
+                  displayName: go.getAddressLine(),
+                  value: go.getAddressLine(),
+                  coords: go.geometry.getCoordinates()
+                });
+              });
+              return items;
+            });
+          }
+        },
+        results: 8,
+        boundedBy: [[55.10, 36.50], [56.50, 38.50]],
+        strictBounds: true
+      }).events.add('select', e => {
+        const item = e.get('item');
+        if (!item) return;
+        
+        ymaps.geocode(item.value).then(res => {
+          const geo = res.geoObjects.get(0);
+          if (geo) {
+            setPoint('A', geo.geometry.getCoordinates(), geo.getAddressLine());
+          }
+        });
+      });
+
+      new ymaps.SuggestView('addrB', {
+        provider: {
+          suggest: (request, options) => {
+            return ymaps.geocode(request, {
+              results: 12,
+              boundedBy: [[55.10, 36.50], [56.50, 38.50]],
+              strictBounds: true
+            }).then(res => {
+              const items = [];
+              res.geoObjects.each(go => {
+                items.push({
+                  displayName: go.getAddressLine(),
+                  value: go.getAddressLine(),
+                  coords: go.geometry.getCoordinates()
+                });
+              });
+              return items;
+            });
+          }
+        },
+        results: 8,
+        boundedBy: [[55.10, 36.50], [56.50, 38.50]],
+        strictBounds: true
+      }).events.add('select', e => {
+        const item = e.get('item');
+        if (!item) return;
+        
+        ymaps.geocode(item.value).then(res => {
+          const geo = res.geoObjects.get(0);
+          if (geo) {
+            setPoint('B', geo.geometry.getCoordinates(), geo.getAddressLine());
+          }
+        });
+      });
+    } catch (error) {
+      console.error('Ошибка инициализации поиска адресов:', error);
+    }
+  });
+}
+function showToast(text, isError = false) {
+  let toast = document.getElementById('toast');
+
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = 'toast';
+    document.body.appendChild(toast);
+  }
+
+  toast.innerHTML = text;
+  toast.className = 'toast' + (isError ? ' error' : '');
+  toast.style.cssText = `
+    position: fixed;
+    top: 100px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    padding: 15px 25px;
+    border-radius: 15px;
+    font-size: 14px;
+    opacity: 0;
+    z-index: 10001;
+    box-shadow: 8px 8px 16px var(--shadow-dark), -8px -8px 16px var(--shadow-light);
+    transition: all 0.3s ease;
+    pointer-events: none;
+    max-width: 80%;
+    text-align: center;
+  `;
+
+  if (isError) {
+    toast.style.color = 'var(--primary-red)';
+  }
+
+  toast.classList.add('show');
+  toast.style.opacity = '1';
+  toast.style.transform = 'translateX(-50%) translateY(10px)';
+  toast.style.pointerEvents = 'auto';
+
+  toast.onclick = function() {
+    toast.style.opacity = '0';
+    toast.style.transform = 'translateX(-50%) translateY(0)';
+    setTimeout(() => {
+      if (toast.parentNode) {
+        toast.parentNode.removeChild(toast);
+      }
+    }, 300);
+  };
+
+  setTimeout(() => {
+    if (toast && toast.parentNode) {
+      toast.style.opacity = '0';
+      toast.style.transform = 'translateX(-50%) translateY(0)';
+      setTimeout(() => {
+        if (toast && toast.parentNode) {
+          toast.parentNode.removeChild(toast);
+        }
+      }, 300);
+    }
+  }, 3000);
+}
+
+function showAlert(message, type = 'info', title = null, duration = 5000) {
+  const alertId = 'alert-' + Date.now();
+  const alert = document.createElement('div');
+  alert.id = alertId;
+  alert.className = `alert alert-${type}`;
+  
+  const icons = {
+    success: '✅',
+    error: '❌',
+    warning: '⚠️',
+    info: 'ℹ️'
+  };
+  
+  alert.innerHTML = `
+    <div class="alert-icon">${icons[type] || icons.info}</div>
+    <div class="alert-content">
+      ${title ? `<div class="alert-title">${title}</div>` : ''}
+      <div class="alert-message">${message}</div>
+    </div>
+    <button class="alert-close" onclick="document.getElementById('${alertId}').remove()">×</button>
+  `;
+  
+  document.body.appendChild(alert);
+  
+  setTimeout(() => alert.classList.add('show'), 10);
+  
+  if (duration > 0) {
+    setTimeout(() => {
+      if (alert.parentNode) {
+        alert.classList.remove('show');
+        setTimeout(() => {
+          if (alert.parentNode) alert.remove();
+        }, 300);
+      }
+    }, duration);
+  }
+}
+</script>
+
+<div id="footer"></div>
+
+<script>
+fetch('/footer.html')
+  .then(r => r.text())
+  .then(html => {
+    document.getElementById('footer').innerHTML = html;
+    return fetch('js/footer.js');
+  })
+  .then(r => r.text())
+  .then(script => {
+    eval(script);
+    initFooter();
+  })
+  .catch(e => console.error('Ошибка загрузки футера:', e));
+</script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const map = document.getElementById('map');
+  const panel = document.querySelector('.panel');
+  
+  if (map && panel) {
+    map.style.zIndex = '1';
+    panel.style.zIndex = '1000';
+    panel.style.pointerEvents = 'auto';
+  }
+  
+  document.querySelectorAll('.panel, .my-home-btn, #openPanelBtn').forEach(el => {
+    el.style.opacity = '0';
+    el.style.transform = 'translateY(20px)';
+    
+    setTimeout(() => {
+      el.style.transition = 'all 0.6s cubic-bezier(0.4, 0, 0.2, 1)';
+      el.style.opacity = '1';
+      el.style.transform = 'translateY(0)';
+    }, 100);
+  });
+  
+  setTimeout(() => {
+    const mainLogo = document.querySelector('.logo');
+    if (mainLogo) {
+      mainLogo.style.cursor = 'pointer';
+      mainLogo.addEventListener('click', function(e) {
+        e.preventDefault();
+        if (typeof showLandingCard === 'function') {
+          showLandingCard();
+        }
+      });
+      mainLogo.title = 'Нажмите для информации о сайте';
+    }
+  }, 500);
+  setTimeout(checkAndShowHomeButton, 1000);
+});
+</script>
+</body>
+</html>
