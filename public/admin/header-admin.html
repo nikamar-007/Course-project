@@ -1,0 +1,105 @@
+<header class="admin-page-header">
+  <div class="logo" id="adminLogo" style="cursor: pointer;" onclick="window.location.href='/index.html'">
+    <span>МойМаршрут</span>
+  </div>
+  <nav id="nav">
+  </nav>
+</header>
+
+<script>
+function initAdminHeader(activeAdminPage) {
+  fetch('/api/me.php')
+    .then(r => {
+      if (!r.ok) throw new Error();
+      return r.json();
+    })
+    .then(user => {
+      const greeting = getGreeting();
+
+      const navHTML = `
+        <span class="greeting">${greeting}, ${user.nickname || user.email}</span>
+        
+        <a href="/index.html" class="nav-link">Карта</a>
+        
+        <a href="/notifications.html" class="nav-link">
+          Уведомления
+          ${user.unread_notifications > 0 ? `
+            <span class="notif-badge">${user.unread_notifications}</span>
+          ` : ''}
+        </a>
+        
+        <a href="/feedback.html" class="nav-link">Обратная связь</a>
+        
+        <a href="/profile.html" class="nav-link">Профиль</a>
+
+        <div class="admin-dropdown" id="adminDropdown">
+          <button class="admin-dropbtn ${activeAdminPage === 'admin' ? 'active' : ''}">
+            Админ
+            <span class="admin-badge">⚙️</span>
+          </button>
+          <div class="admin-dropdown-content">
+            <a href="/zones.html" class="${activeAdminPage === 'zones' ? 'active' : ''}">Зоны ремонта</a>
+            <a href="/users.html" class="${activeAdminPage === 'users' ? 'active' : ''}">Пользователи</a>
+            <a href="/feedback.html" class="${activeAdminPage === 'feedback' ? 'active' : ''}">Обратная связь (админ)</a>
+            <a href="/broadcast.html" class="${activeAdminPage === 'broadcast' ? 'active' : ''}">Рассылка</a>
+          </div>
+        </div>
+        
+        <a href="/api/logout.php" class="nav-link">Выход</a>
+      `;
+      
+      const nav = document.getElementById('nav');
+      if (nav) {
+        nav.innerHTML = navHTML;
+
+        initAdminDropdown();
+
+        const logo = document.getElementById('adminLogo');
+        if (logo) {
+          logo.style.cursor = 'pointer';
+          logo.onclick = function(e) {
+            e.preventDefault();
+            window.location.href = '/index.html';
+          };
+        }
+      }
+    })
+    .catch(() => {
+      window.location.href = '/login.html';
+    });
+}
+
+function getGreeting() {
+  const hour = new Date().getHours();
+  if (hour >= 5 && hour < 12) return 'Доброе утро';
+  if (hour >= 12 && hour < 17) return 'Добрый день';
+  if (hour >= 17 && hour < 23) return 'Добрый вечер';
+  return 'Доброй ночи';
+}
+
+function initAdminDropdown() {
+  const dropdown = document.getElementById('adminDropdown');
+  if (!dropdown) return;
+  
+  const dropbtn = dropdown.querySelector('.admin-dropbtn');
+  const dropdownContent = dropdown.querySelector('.admin-dropdown-content');
+  
+  if (dropbtn && dropdownContent) {
+    dropbtn.addEventListener('click', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      dropdown.classList.toggle('active');
+    });
+    
+    document.addEventListener('click', function(e) {
+      if (!dropdown.contains(e.target)) {
+        dropdown.classList.remove('active');
+      }
+    });
+    
+    dropdownContent.addEventListener('click', function(e) {
+      e.stopPropagation();
+    });
+  }
+}
+</script>
