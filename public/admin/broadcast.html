@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Админ — Рассылка</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="js/init-landing.js" defer></script>
+</head>
+<body>
+<div id="adminHeader"></div>
+
+<script>
+fetch('header-admin.html')
+  .then(r => r.text())
+  .then(html => {
+    document.getElementById('adminHeader').innerHTML = html;
+    initAdminHeader('broadcast');
+  });
+
+document.querySelector('.logo').addEventListener('click', function(e) {
+    e.preventDefault();
+    if (typeof showLandingCard === 'function') {
+        showLandingCard();
+    }
+});
+</script>
+
+
+<div class="admin-container broadcast-container">
+  <div class="admin-header">
+    <div>
+      <h1 class="admin-title">Рассылка</h1>
+      <p class="admin-subtitle">Отправка уведомлений пользователям</p>
+    </div>
+    <div class="user-count">
+      Пользователей: <span id="usersCount">...</span>
+    </div>
+  </div>
+
+  <div class="broadcast-box">
+    <div class="warning-box">
+      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+        <div style="color: #C53030;">⚠️</div>
+        <div style="font-weight: 500; color: #2D3748;">Внимание</div>
+      </div>
+      <div style="font-size: 14px; color: #4A5568;">
+        Уведомление будет отправлено всем пользователям системы. Отправляйте только важные сообщения.
+      </div>
+    </div>
+
+    <div>
+      <div style="font-weight: 500; margin-bottom: 8px;">Заголовок уведомления</div>
+      <input 
+        type="text" 
+        id="title" 
+        placeholder="Например: Важные обновления системы"
+        maxlength="100"
+      >
+    </div>
+
+    <div>
+      <div style="font-weight: 500; margin-bottom: 8px;">Текст уведомления</div>
+      <textarea 
+        id="message" 
+        placeholder="Введите текст уведомления..."
+        maxlength="500"
+      ></textarea>
+    </div>
+
+    <button onclick="sendBroadcast()" class="btn-send" id="sendButton">
+      Отправить рассылку
+    </button>
+  </div>
+</div>
+
+<script>
+function initAdminHeader(activeAdminPage) {
+  fetch('/api/me.php')
+    .then(r => {
+      if (!r.ok) throw new Error();
+      return r.json();
+    })
+    .then(user => {
+      const greeting = getGreeting();
+
+      const navHTML = `
+        <span class="greeting">${greeting}, ${user.nickname || user.email}</span>
+        
+        <a href="/index.html" class="nav-link">Карта</a>
+        
+        <a href="/notifications.html" class="nav-link">
+          Уведомления
+          ${user.unread_notifications > 0 ? `
+            <span class="notif-badge">${user.unread_notifications}</span>
+          ` : ''}
+        </a>
+        
+        <a href="/feedback.html" class="nav-link">Обратная связь</a>
+        
+        <a href="/profile.html" class="nav-link">Профиль</a>
+
+        <div class="admin-dropdown">
+          <button class="admin-dropbtn">
+            Админ
+            <span class="admin-badge">⚙️</span>
+          </button>
+          <div class="admin-dropdown-content">
+            <a href="/admin/zones.html" class="${activeAdminPage === 'zones' ? 'active' : ''}">Зоны ремонта</a>
+            <a href="/admin/users.html" class="${activeAdminPage === 'users' ? 'active' : ''}">Пользователи</a>
+            <a href="/admin/feedback.html" class="${activeAdminPage === 'feedback' ? 'active' : ''}">Обратная связь (админ)</a>
+            <a href="/admin/broadcast.html" class="${activeAdminPage === 'broadcast' ? 'active' : ''}">Рассылка</a>
+          </div>
+        </div>
+        
+        
+        <a href="/api/logout.php" class="nav-link">Выход</a>
+      `;
+      
+      document.getElementById('nav').innerHTML = navHTML;
+    })
+    .catch(() => {
+      window.location.href = '/login.html';
+    });
+}
+
+function getGreeting() {
+  const hour = new Date().getHours();
+  if (hour >= 5 && hour < 12) return 'Доброе утро';
+  if (hour >= 12 && hour < 17) return 'Добрый день';
+  if (hour >= 17 && hour < 23) return 'Добрый вечер';
+  return 'Доброй ночи';
+}
+
+fetch('/api/admin/users.php')
+  .then(r => r.json())
+  .then(users => {
+    document.getElementById('usersCount').textContent = users.length;
+  });
+
+function showSuccessMessage(message) {
+  const existingMessage = document.querySelector('.success-message');
+  if (existingMessage) {
+    existingMessage.remove();
+  }
+  
+  const successDiv = document.createElement('div');
+  successDiv.className = 'success-message';
+  successDiv.innerHTML = `
+    <div style="display: flex; align-items: center; gap: 10px;">
+      <span style="font-size: 18px;">✅</span>
+      <span>${message}</span>
+    </div>
+  `;
+  
+  document.body.appendChild(successDiv);
+
+  setTimeout(() => {
+    if (successDiv.parentNode) {
+      successDiv.style.opacity = '0';
+      successDiv.style.transform = 'translateX(100%)';
+      setTimeout(() => {
+        if (successDiv.parentNode) {
+          successDiv.remove();
+        }
+      }, 3000);
+    }
+  }, 3000);
+}
+
+function sendBroadcast() {
+  const title = document.getElementById('title').value.trim();
+  const message = document.getElementById('message').value.trim();
+  const button = document.getElementById('sendButton');
+
+  if (!title || !message) {
+    alert('Заполните все поля');
+    return;
+  }
+
+  if (!confirm('Отправить рассылку всем пользователям?')) {
+    return;
+  }
+
+  button.innerHTML = '⏳ Отправка...';
+  button.disabled = true;
+
+  fetch('/api/admin/broadcast.php', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ title, message })
+  })
+  .then(r => r.json())
+  .then(response => {
+    showSuccessMessage('✅ Рассылка успешно отправлена!');
+  
+    setTimeout(() => {
+      location.reload();
+    }, 1500);
+  })
+  .catch(err => {
+    alert('Ошибка отправки: ' + err.message);
+    button.innerHTML = 'Отправить рассылку';
+    button.disabled = false;
+  });
+}
+</script>
+
+<div id="landingCardContainer"></div>
+<script>
+  fetch('/landing-card.html')
+    .then(r => r.text())
+    .then(html => {
+      document.getElementById('landingCardContainer').innerHTML = html;
+      
+      const mainLogo = document.querySelector('.logo span');
+      if (mainLogo) {
+        mainLogo.style.cursor = 'pointer';
+        mainLogo.parentElement.style.cursor = 'pointer';
+        mainLogo.parentElement.addEventListener('click', function(e) {
+          e.preventDefault();
+          e.stopPropagation();
+          if (typeof showLandingCard === 'function') {
+            showLandingCard();
+          }
+        });
+        mainLogo.parentElement.title = 'Нажмите для информации о сайте';
+      }
+    });
+</script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    function showLandingCard() {
+        window.location.href = '/index.html';
+    }
+
+    const logos = document.querySelectorAll('.logo, .admin-page-header .logo');
+    logos.forEach(logo => {
+        logo.style.cursor = 'pointer';
+        logo.title = 'Перейти на главную';
+        logo.addEventListener('click', function(e) {
+            e.preventDefault();
+            showLandingCard();
+        });
+    });
+
+    setTimeout(() => {
+        const logos = document.querySelectorAll('.logo, .admin-page-header .logo');
+        logos.forEach(logo => {
+            if (!logo.hasAttribute('data-click-bound')) {
+                logo.style.cursor = 'pointer';
+                logo.title = 'Перейти на главную';
+                logo.setAttribute('data-click-bound', 'true');
+                logo.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    showLandingCard();
+                });
+            }
+        });
+    }, 1000);
+});
+</script>
+</body>
+</html>

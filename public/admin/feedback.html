@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Обратная связь — Админ</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="js/init-landing.js" defer></script>
+  <style>
+    body {
+      background: #f5f7fa;
+      min-height: 100vh;
+      overflow: hidden;
+    }
+    .zones-stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 20px;
+      margin-bottom: 30px;
+    }
+    
+    .stat-card {
+      background: white;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      transition: transform 0.3s ease;
+      cursor: pointer;
+    }
+    
+    .stat-card:hover {
+      transform: translateY(-5px);
+    }
+    
+    .stat-card.total {
+      border-left: 4px solid #2196F3;
+    }
+    
+    .stat-card.pending {
+      border-left: 4px solid #FBC02D;
+    }
+    
+    .stat-card.answered {
+      border-left: 4px solid #43A047;
+    }
+    
+    .stat-card.bug {
+      border-left: 4px solid #E53935;
+    }
+    
+    .stat-card.suggestion {
+      border-left: 4px solid #FF9800;
+    }
+    
+    .stat-card.question {
+      border-left: 4px solid #9C27B0;
+    }
+    
+    .stat-card.complaint {
+      border-left: 4px solid #3F51B5;
+    }
+    
+    .stat-number {
+      font-size: 32px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+    
+    .stat-label {
+      font-size: 14px;
+      color: #666;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    
+    .stat-details {
+      font-size: 12px;
+      color: #888;
+      margin-top: 5px;
+    }
+    
+    .admin-container {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 100px 20px 40px;
+      min-height: calc(100vh - 70px);
+    }
+    
+    .admin-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 30px;
+      position: sticky;
+      top: 0;
+      background: #f5f7fa;
+      z-index: 10;
+      padding-top: 20px;
+      padding-bottom: 15px;
+    }
+
+    
+    .admin-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    
+    .admin-table th {
+      background: #F7FAFC;
+      padding: 16px 20px;
+      text-align: left;
+      font-weight: 600;
+      font-size: 14px;
+      color: #4A5568;
+      border-bottom: 1px solid #E2E8F0;
+      position: sticky;
+      top: 0;
+      z-index: 5;
+    }
+    
+    .admin-table td {
+      padding: 20px;
+      border-bottom: 1px solid #E2E8F0;
+      font-size: 15px;
+      color: #2D3748;
+      vertical-align: top;
+    }
+    
+    .admin-table tr:hover {
+      background: #F7FAFC;
+    }
+    
+    .reply-textarea {
+      width: 100%;
+      min-height: 80px;
+      padding: 12px;
+      border: 1px solid #E2E8F0;
+      border-radius: 8px;
+      font-size: 14px;
+      font-family: inherit;
+      resize: vertical;
+    }
+    
+    .reply-textarea:focus {
+      outline: none;
+      border-color: #E53935;
+    }
+    
+    .btn-reply {
+      background: #E53935;
+      color: white;
+      border: none;
+      padding: 10px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      transition: background 0.2s;
+    }
+    
+    .btn-reply:hover {
+      background: #C62828;
+    }
+    
+    .status-answered {
+      background: #C6F6D5;
+      color: #22543D;
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 500;
+    }
+    
+    .status-pending {
+      background: #FED7D7;
+      color: #742A2A;
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 500;
+    }
+    
+    .loading {
+      text-align: center;
+      padding: 40px;
+      color: #718096;
+    }
+    
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: #A0AEC0;
+    }
+    
+    .filters {
+      background: white;
+      padding: 15px 20px;
+      border-radius: 12px;
+      margin-bottom: 20px;
+      display: flex;
+      gap: 15px;
+      align-items: center;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    
+    .filter-btn {
+      padding: 8px 16px;
+      border-radius: 20px;
+      border: 1px solid #E2E8F0;
+      background: white;
+      color: #4A5568;
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.2s;
+    }
+    
+    .filter-btn:hover {
+      background: #F7FAFC;
+    }
+    
+    .filter-btn.active {
+      background: #E53935;
+      color: white;
+      border-color: #E53935;
+    }
+    
+    .message-preview {
+      max-width: 300px;
+      word-wrap: break-word;
+      max-height: 80px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical;
+    }
+    
+    .expand-btn {
+      background: none;
+      border: none;
+      color: #E53935;
+      cursor: pointer;
+      font-size: 12px;
+      padding: 0;
+      margin-top: 4px;
+    }
+    
+    .files-list {
+      margin-top: 8px;
+    }
+    
+    .file-link {
+      display: inline-block;
+      background: #EDF2F7;
+      padding: 4px 8px;
+      border-radius: 4px;
+      margin-right: 6px;
+      margin-bottom: 4px;
+      font-size: 12px;
+      color: #4A5568;
+      text-decoration: none;
+    }
+    
+    .file-link:hover {
+      background: #E2E8F0;
+    }
+  </style>
+</head>
+<body>
+<div id="adminHeader"></div>
+
+<script>
+fetch('header-admin.html')
+  .then(r => r.text())
+  .then(html => {
+    document.getElementById('adminHeader').innerHTML = html;
+    initAdminHeader('feedback');
+  });
+</script>
+
+<div class="admin-container">
+  <!-- Статистика обратной связи -->
+  <div class="zones-stats" id="feedbackStats">
+    <div class="stat-card total" onclick="filterFeedback('all')">
+      <div class="stat-number" id="totalFeedback">0</div>
+      <div class="stat-label">Всего обращений</div>
+      <div class="stat-details">За все время</div>
+    </div>
+    <div class="stat-card pending" onclick="filterFeedback('pending')">
+      <div class="stat-number" id="pendingFeedback">0</div>
+      <div class="stat-label">Ожидают ответа</div>
+      <div class="stat-details">Требуют внимания</div>
+    </div>
+    <div class="stat-card answered" onclick="filterFeedback('answered')">
+      <div class="stat-number" id="answeredFeedback">0</div>
+      <div class="stat-label">Отвечено</div>
+      <div class="stat-details">Закрытые обращения</div>
+    </div>
+    <div class="stat-card bug" onclick="filterFeedback('bug')">
+      <div class="stat-number" id="bugFeedback">0</div>
+      <div class="stat-label">Ошибки</div>
+      <div class="stat-details">Сообщения об ошибках</div>
+    </div>
+    <div class="stat-card suggestion" onclick="filterFeedback('suggestion')">
+      <div class="stat-number" id="suggestionFeedback">0</div>
+      <div class="stat-label">Предложения</div>
+      <div class="stat-details">Идеи по улучшению</div>
+    </div>
+    <div class="stat-card question" onclick="filterFeedback('question')">
+      <div class="stat-number" id="questionFeedback">0</div>
+      <div class="stat-label">Вопросы</div>
+      <div class="stat-details">Запросы информации</div>
+    </div>
+  </div>
+  <div class="filters">
+    <span style="font-weight: 500; color: #4A5568;">Фильтры:</span>
+    <button class="filter-btn active" onclick="filterFeedback('all')">Все</button>
+    <button class="filter-btn" onclick="filterFeedback('pending')">Ожидают ответа</button>
+    <button class="filter-btn" onclick="filterFeedback('answered')">Отвечено</button>
+    <button class="filter-btn" onclick="filterFeedback('bug')">Ошибки</button>
+    <button class="filter-btn" onclick="filterFeedback('suggestion')">Предложения</button>
+    <button class="filter-btn" onclick="filterFeedback('question')">Вопросы</button>
+  </div>
+  <div class="admin-table-wrapper">
+    <table class="admin-table">
+      <thead>
+        <tr>
+          <th>Тип</th>
+          <th>Сообщение</th>
+          <th>Пользователь</th>
+          <th>Дата</th>
+          <th>Ответ администратора</th>
+          <th>Статус</th>
+          <th>Действия</th>
+        </tr>
+      </thead>
+      <tbody id="feedbackBody">
+        <tr>
+          <td colspan="7" class="loading">Загрузка обращений...</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+let allFeedback = [];
+let currentFilter = 'all';
+
+function initAdminHeader(activeAdminPage) {
+  fetch('/api/me.php')
+    .then(r => {
+      if (!r.ok) throw new Error();
+      return r.json();
+    })
+    .then(user => {
+      const greeting = getGreeting();
+      
+      const navHTML = `
+        <span class="greeting">${greeting}, ${user.nickname || user.email}</span>
+        
+        <a href="/index.html" class="nav-link">Карта</a>
+        
+        <a href="/notifications.html" class="nav-link">
+          Уведомления
+          ${user.unread_notifications > 0 ? `
+            <span class="notif-badge">${user.unread_notifications}</span>
+          ` : ''}
+        </a>
+        
+        <a href="/feedback.html" class="nav-link">Обратная связь</a>
+        
+        <a href="/profile.html" class="nav-link">Профиль</a>
+
+        <div class="admin-dropdown">
+          <button class="admin-dropbtn">
+            Админ
+            <span class="admin-badge">⚙️</span>
+          </button>
+          <div class="admin-dropdown-content">
+            <a href="/admin/zones.html" class="${activeAdminPage === 'zones' ? 'active' : ''}">Зоны ремонта</a>
+            <a href="/admin/users.html" class="${activeAdminPage === 'users' ? 'active' : ''}">Пользователи</a>
+            <a href="/admin/feedback.html" class="${activeAdminPage === 'feedback' ? 'active' : ''}">Обратная связь</a>
+            <a href="/admin/broadcast.html" class="${activeAdminPage === 'broadcast' ? 'active' : ''}">Рассылка</a>
+          </div>
+        </div>
+        
+        <a href="/api/logout.php" class="nav-link">Выход</a>
+      `;
+      
+      document.getElementById('nav').innerHTML = navHTML;
+    })
+    .catch(() => {
+      window.location.href = '/login.html';
+    });
+}
+
+function getGreeting() {
+  const hour = new Date().getHours();
+  if (hour >= 5 && hour < 12) return 'Доброе утро';
+  if (hour >= 12 && hour < 17) return 'Добрый день';
+  if (hour >= 17 && hour < 23) return 'Добрый вечер';
+  return 'Доброй ночи';
+}
+
+function loadFeedbackStats() {
+  fetch('/api/admin/feedback_stats.php')
+    .then(r => {
+      if (!r.ok) throw new Error('Ошибка загрузки статистики');
+      return r.json();
+    })
+    .then(stats => {
+      document.getElementById('totalFeedback').textContent = stats.total || 0;
+      document.getElementById('pendingFeedback').textContent = stats.pending || 0;
+      document.getElementById('answeredFeedback').textContent = stats.answered || 0;
+      document.getElementById('bugFeedback').textContent = stats.bug || 0;
+      document.getElementById('suggestionFeedback').textContent = stats.suggestion || 0;
+      document.getElementById('questionFeedback').textContent = stats.question || 0;
+    })
+    .catch(err => {
+      console.error('Ошибка загрузки статистики обратной связи:', err);
+    });
+}
+
+function loadFeedback() {
+  const body = document.getElementById('feedbackBody');
+  body.innerHTML = '<tr><td colspan="7" class="loading">Загрузка обращений...</td></tr>';
+
+  fetch('/api/admin/feedback_list.php')
+    .then(r => {
+      if (!r.ok) throw new Error('Ошибка API');
+      return r.json();
+    })
+    .then(items => {
+      allFeedback = items;
+      renderFeedback(items);
+    })
+    .catch(err => {
+      console.error(err);
+      body.innerHTML = `
+        <tr>
+          <td colspan="7" style="text-align: center; color: #C53030; padding: 40px;">
+            ❌ Не удалось загрузить обращения
+          </td>
+        </tr>
+      `;
+    });
+}
+
+function renderFeedback(items) {
+  const body = document.getElementById('feedbackBody');
+  
+  if (!items || items.length === 0) {
+    body.innerHTML = `
+      <tr>
+        <td colspan="7" class="empty-state">
+          💬 Нет обращений
+        </td>
+      </tr>
+    `;
+    return;
+  }
+
+  let html = '';
+  items.forEach(f => {
+    const typeLabels = {
+      'bug': 'Ошибка',
+      'suggestion': 'Предложение',
+      'question': 'Вопрос',
+      'complaint': 'Жалоба',
+      'thanks': 'Благодарность',
+      'other': 'Другое'
+    };
+    const typeLabel = typeLabels[f.type] || f.type;
+    const typeClass = f.type || 'other';
+    
+    const messagePreview = f.message.length > 150 ? 
+      f.message.substring(0, 150) + '...' : f.message;
+    const showExpand = f.message.length > 150;
+    
+    let filesHTML = '';
+    if (f.files && f.files.length > 0) {
+      filesHTML = `<div class="files-list">`;
+      f.files.split(',').forEach(file => {
+        const fileName = file.split('/').pop();
+        filesHTML += `
+          <a href="${file}" target="_blank" class="file-link" title="${fileName}">
+            📎 ${fileName.length > 20 ? fileName.substring(0, 20) + '...' : fileName}
+          </a>
+        `;
+      });
+      filesHTML += `</div>`;
+    }
+    
+    html += `
+      <tr>
+        <td>
+          <span class="status-badge ${typeClass}" style="text-transform: capitalize;">
+            ${typeLabel}
+          </span>
+        </td>
+        <td>
+          <div class="message-preview" id="msg-${f.id}">
+            ${messagePreview.replace(/\n/g, '<br>')}
+          </div>
+          ${showExpand ? `
+            <button class="expand-btn" onclick="toggleMessage(${f.id}, '${f.message.replace(/'/g, "\\'")}')">
+              Показать полностью
+            </button>
+          ` : ''}
+          ${filesHTML}
+        </td>
+        <td>
+          ${f.email ? `
+            <a href="mailto:${f.email}" style="color: #E53935;">
+              ${f.email}
+            </a>
+            <br>
+            <small style="color: #718096;">${f.nickname || 'Без ника'}</small>
+          ` : 'Аноним'}
+        </td>
+        <td title="${new Date(f.created_at).toLocaleString('ru-RU')}">
+          ${new Date(f.created_at).toLocaleDateString('ru-RU')}<br>
+          <small style="color: #718096;">${new Date(f.created_at).toLocaleTimeString('ru-RU', {hour: '2-digit', minute:'2-digit'})}</small>
+        </td>
+        <td style="min-width: 250px;">
+          ${f.admin_reply ? `
+            <div style="max-width: 300px; color: #2D3748; background: #F7FAFC; padding: 10px; border-radius: 6px;">
+              ${f.admin_reply.replace(/\n/g, '<br>')}
+              <div style="font-size: 12px; color: #718096; margin-top: 5px;">
+                Ответил: ${f.admin_name || 'Администратор'}
+              </div>
+            </div>
+          ` : `
+            <textarea 
+              id="reply-${f.id}" 
+              class="reply-textarea" 
+              placeholder="Введите ответ..."
+              rows="3"
+            ></textarea>
+            <button 
+              onclick="sendReply(${f.id})" 
+              class="btn-reply"
+              style="margin-top: 8px;"
+            >
+              Отправить ответ
+            </button>
+          `}
+        </td>
+        <td>
+          ${f.admin_reply ? 
+            '<span class="status-answered">Отвечено</span>' : 
+            '<span class="status-pending">Ожидает</span>'
+          }
+        </td>
+        <td>
+          ${!f.admin_reply ? `
+            <button onclick="markAsSpam(${f.id})" class="btn-delete" style="background: #FED7D7; color: #C53030; border: none; padding: 8px 12px; border-radius: 6px; cursor: pointer;">
+              Спам
+            </button>
+          ` : `
+            <button onclick="deleteFeedback(${f.id})" class="btn-delete" style="background: #FED7D7; color: #C53030; border: none; padding: 8px 12px; border-radius: 6px; cursor: pointer;">
+              Удалить
+            </button>
+          `}
+        </td>
+      </tr>
+    `;
+  });
+  
+  body.innerHTML = html;
+}
+
+function filterFeedback(filterType) {
+  currentFilter = filterType;
+  
+  document.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.classList.remove('active');
+  });
+  document.querySelector(`.filter-btn[onclick*="${filterType}"]`)?.classList.add('active');
+  
+  let filteredFeedback = [];
+  
+  switch(filterType) {
+    case 'all':
+      filteredFeedback = allFeedback;
+      break;
+      
+    case 'pending':
+      filteredFeedback = allFeedback.filter(f => !f.admin_reply);
+      break;
+      
+    case 'answered':
+      filteredFeedback = allFeedback.filter(f => f.admin_reply);
+      break;
+      
+    case 'bug':
+      filteredFeedback = allFeedback.filter(f => f.type === 'bug');
+      break;
+      
+    case 'suggestion':
+      filteredFeedback = allFeedback.filter(f => f.type === 'suggestion');
+      break;
+      
+    case 'question':
+      filteredFeedback = allFeedback.filter(f => f.type === 'question');
+      break;
+      
+    default:
+      filteredFeedback = allFeedback;
+  }
+  
+  renderFeedback(filteredFeedback);
+}
+
+function toggleMessage(id, fullMessage) {
+  const element = document.getElementById(`msg-${id}`);
+  const button = element.nextElementSibling;
+  
+  if (element.classList.contains('expanded')) {
+    const preview = fullMessage.length > 150 ? 
+      fullMessage.substring(0, 150) + '...' : fullMessage;
+    element.innerHTML = preview.replace(/\n/g, '<br>');
+    element.classList.remove('expanded');
+    button.textContent = 'Показать полностью';
+  } else {
+    element.innerHTML = fullMessage.replace(/\n/g, '<br>');
+    element.classList.add('expanded');
+    button.textContent = 'Свернуть';
+  }
+}
+
+async function sendReply(id) {
+  const textarea = document.getElementById('reply-' + id);
+  const text = textarea.value.trim();
+  
+  if (!text) {
+    alert('Введите ответ');
+    return;
+  }
+
+  const button = textarea.nextElementSibling;
+  const originalText = button.textContent;
+  button.textContent = 'Отправка...';
+  button.disabled = true;
+  textarea.disabled = true;
+
+  try {
+    const response = await fetch('/api/admin/feedback_reply.php', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ feedback_id: id, reply: text })
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const responseText = await response.text();
+    let result;
+    try {
+      result = JSON.parse(responseText);
+    } catch (e) {
+      console.warn('Response is not JSON:', responseText);
+      result = { success: true };
+    }
+
+    if (result.success || result.message) {
+      await loadFeedbackStats();
+      await reloadFeedbackAndApplyFilter();
+      
+      if (result.message) {
+        alert(result.message);
+      } else {
+        alert('Ответ успешно отправлен!');
+      }
+    } else {
+      throw new Error(result.error || 'Неизвестная ошибка');
+    }
+    
+  } catch (error) {
+    console.error('Error sending reply:', error);
+    alert('Ошибка отправки: ' + error.message);
+    
+    button.textContent = originalText;
+    button.disabled = false;
+    textarea.disabled = false;
+  }
+}
+
+async function reloadFeedbackAndApplyFilter() {
+  await loadFeedback();
+  filterFeedback(currentFilter);
+}
+
+function loadFeedback() {
+  return new Promise((resolve, reject) => {
+    const body = document.getElementById('feedbackBody');
+    body.innerHTML = '<tr><td colspan="7" class="loading">Загрузка обращений...</td></tr>';
+
+    fetch('/api/admin/feedback_list.php')
+      .then(r => {
+        if (!r.ok) throw new Error('Ошибка API');
+        return r.json();
+      })
+      .then(items => {
+        allFeedback = items;
+        renderFeedback(items);
+        resolve(items);
+      })
+      .catch(err => {
+        console.error(err);
+        body.innerHTML = `
+          <tr>
+            <td colspan="7" style="text-align: center; color: #C53030; padding: 40px;">
+              ❌ Не удалось загрузить обращения
+            </td>
+          </tr>
+        `;
+        reject(err);
+      });
+  });
+}
+
+function loadFeedbackStats() {
+  return new Promise((resolve, reject) => {
+    fetch('/api/admin/feedback_stats.php')
+      .then(r => {
+        if (!r.ok) throw new Error('Ошибка загрузки статистики');
+        return r.json();
+      })
+      .then(stats => {
+        document.getElementById('totalFeedback').textContent = stats.total || 0;
+        document.getElementById('pendingFeedback').textContent = stats.pending || 0;
+        document.getElementById('answeredFeedback').textContent = stats.answered || 0;
+        document.getElementById('bugFeedback').textContent = stats.bug || 0;
+        document.getElementById('suggestionFeedback').textContent = stats.suggestion || 0;
+        document.getElementById('questionFeedback').textContent = stats.question || 0;
+        resolve(stats);
+      })
+      .catch(err => {
+        console.error('Ошибка загрузки статистики обратной связи:', err);
+        reject(err);
+      });
+  });
+}
+
+document.addEventListener('DOMContentLoaded', async function() {
+  try {
+    await loadFeedbackStats();
+    await loadFeedback();
+    filterFeedback(currentFilter);
+  } catch (err) {
+    console.error('Ошибка при загрузке:', err);
+  }
+  
+  setInterval(async function() {
+    try {
+      await loadFeedbackStats();
+      await loadFeedback();
+      filterFeedback(currentFilter);
+    } catch (err) {
+      console.error('Ошибка при автообновлении:', err);
+    }
+  }, 60000);
+});
+
+function markAsSpam(id) {
+  if (!confirm('Пометить обращение как спам?')) return;
+  
+  fetch(`/api/admin/feedback_spam.php?id=${id}`, {
+    method: 'POST'
+  })
+  .then(r => r.json())
+  .then(async result => {
+    if (result.success) {
+      alert('Обращение помечено как спам');
+      try {
+        await loadFeedbackStats();
+        await loadFeedback();
+        filterFeedback(currentFilter);
+      } catch (err) {
+        console.error('Ошибка при обновлении данных:', err);
+      }
+    } else {
+      alert('Ошибка: ' + result.error);
+    }
+  })
+  .catch(err => {
+    alert('Ошибка: ' + err.message);
+  });
+}
+
+function deleteFeedback(id) {
+  if (!confirm('Удалить обращение?')) return;
+  
+  fetch(`/api/admin/feedback_delete.php?id=${id}`, {
+    method: 'DELETE'
+  })
+  .then(r => r.json())
+  .then(async result => {
+    if (result.success) {
+      alert('Обращение удалено');
+      try {
+        await loadFeedbackStats();
+        await loadFeedback();
+        filterFeedback(currentFilter);
+      } catch (err) {
+        console.error('Ошибка при обновлении данных:', err);
+      }
+    } else {
+      alert('Ошибка: ' + result.error);
+    }
+  })
+  .catch(err => {
+    alert('Ошибка: ' + err.message);
+  });
+}
+</script>
+
+</body>
+</html>

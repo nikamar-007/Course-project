@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Админ — Пользователи</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="js/init-landing.js" defer></script>
+  <style>
+    .zones-stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 20px;
+      margin-bottom: 30px;
+    }
+    
+    .stat-card {
+      background: white;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      transition: transform 0.3s ease;
+      cursor: pointer;
+    }
+    
+    .stat-card:hover {
+      transform: translateY(-5px);
+    }
+    
+    .stat-card.total {
+      border-left: 4px solid #2196F3;
+    }
+    
+    .stat-card.admins {
+      border-left: 4px solid #E53935;
+    }
+    
+    .stat-card.users {
+      border-left: 4px solid #43A047;
+    }
+    
+    .stat-card.no-yard {
+      border-left: 4px solid #FBC02D;
+    }
+    
+    .stat-card.today {
+      border-left: 4px solid #9C27B0;
+    }
+    
+    .stat-card.verified {
+      border-left: 4px solid #00BCD4;
+    }
+    
+    .stat-card.with-nickname {
+      border-left: 4px solid #FF9800;
+    }
+    
+    .stat-number {
+      font-size: 32px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+    
+    .stat-label {
+      font-size: 14px;
+      color: #666;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    
+    .stat-details {
+      font-size: 12px;
+      color: #888;
+      margin-top: 5px;
+    }
+    body {
+      background: #f5f7fa;
+      min-height: 100vh;
+      overflow: hidden;
+    }
+    
+    .admin-container {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 100px 20px 40px;
+      min-height: calc(100vh - 70px);
+    }
+    
+    .admin-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 30px;
+      position: sticky;
+      top: 0;
+      background: #f5f7fa;
+      z-index: 10;
+      padding-top: 20px;
+      padding-bottom: 15px;
+    }
+    
+    
+    .admin-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    
+    .admin-table th {
+      background: #F7FAFC;
+      padding: 16px 20px;
+      text-align: left;
+      font-weight: 600;
+      font-size: 14px;
+      color: #4A5568;
+      border-bottom: 1px solid #E2E8F0;
+      position: sticky;
+      top: 0;
+      z-index: 5;
+    }
+    
+    .admin-table td {
+      padding: 20px;
+      border-bottom: 1px solid #E2E8F0;
+      font-size: 15px;
+      color: #2D3748;
+    }
+    
+    .admin-table tr:hover {
+      background: #F7FAFC;
+    }
+    
+    .user-avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: #E53935;
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 600;
+      margin-right: 12px;
+    }
+    
+    .user-info {
+      display: flex;
+      align-items: center;
+    }
+    
+    .role-badge {
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 14px;
+      font-weight: 500;
+    }
+    
+    .role-admin {
+      background: #FED7D7;
+      color: #C53030;
+    }
+    
+    .role-user {
+      background: #BEE3F8;
+      color: #2C5282;
+    }
+    
+    .loading {
+      text-align: center;
+      padding: 40px;
+      color: #718096;
+    }
+    
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: #A0AEC0;
+    }
+    
+    .filters {
+      background: white;
+      padding: 15px 20px;
+      border-radius: 12px;
+      margin-bottom: 20px;
+      display: flex;
+      gap: 15px;
+      align-items: center;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    
+    .filter-btn {
+      padding: 8px 16px;
+      border-radius: 20px;
+      border: 1px solid #E2E8F0;
+      background: white;
+      color: #4A5568;
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.2s;
+    }
+    
+    .filter-btn:hover {
+      background: #F7FAFC;
+    }
+    
+    .filter-btn.active {
+      background: #E53935;
+      color: white;
+      border-color: #E53935;
+    }
+  </style>
+</head>
+<body>
+<div id="adminHeader"></div>
+
+<script>
+fetch('header-admin.html')
+  .then(r => r.text())
+  .then(html => {
+    document.getElementById('adminHeader').innerHTML = html;
+    initAdminHeader('users');
+  });
+</script>
+
+<div class="admin-container">
+  <div class="zones-stats" id="usersStats">
+    <div class="stat-card total" onclick="filterUsers('all')">
+      <div class="stat-number" id="totalUsers">0</div>
+      <div class="stat-label">Всего пользователей</div>
+      <div class="stat-details">Зарегистрировано в системе</div>
+    </div>
+    <div class="stat-card admins" onclick="filterUsers('admin')">
+      <div class="stat-number" id="adminUsers">0</div>
+      <div class="stat-label">Администраторов</div>
+      <div class="stat-details">Права на управление</div>
+    </div>
+    <div class="stat-card users" onclick="filterUsers('user')">
+      <div class="stat-number" id="regularUsers">0</div>
+      <div class="stat-label">Обычных пользователей</div>
+      <div class="stat-details">Стандартная роль</div>
+    </div>
+    <div class="stat-card no-yard" onclick="filterUsers('no-yard')">
+      <div class="stat-number" id="usersWithoutYard">0</div>
+      <div class="stat-label">Без двора</div>
+      <div class="stat-details">Не выбрали двор</div>
+    </div>
+    <div class="stat-card today" onclick="filterUsers('today')">
+      <div class="stat-number" id="usersToday">0</div>
+      <div class="stat-label">Зарегистрировано сегодня</div>
+      <div class="stat-details">За последние 24 часа</div>
+    </div>
+    <div class="stat-card with-nickname" onclick="filterUsers('with-nickname')">
+      <div class="stat-number" id="usersWithNickname">0</div>
+      <div class="stat-label">С ником</div>
+      <div class="stat-details">Указали никнейм</div>
+    </div>
+  </div>
+  <div class="filters">
+    <span style="font-weight: 500; color: #4A5568;">Фильтры:</span>
+    <button class="filter-btn active" onclick="filterUsers('all')">Все</button>
+    <button class="filter-btn" onclick="filterUsers('admin')">Админы</button>
+    <button class="filter-btn" onclick="filterUsers('user')">Пользователи</button>
+    <button class="filter-btn" onclick="filterUsers('no-yard')">Без двора</button>
+    <button class="filter-btn" onclick="filterUsers('today')">Сегодня</button>
+  </div>
+  <div class="admin-table-wrapper">
+    <table class="admin-table">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Пользователь</th>
+          <th>Email</th>
+          <th>Адрес</th>
+          <th>Двор</th>
+          <th>Роль</th>
+          <th>Регистрация</th>
+        </tr>
+      </thead>
+      <tbody id="users">
+        <tr>
+          <td colspan="8" class="loading">Загрузка пользователей...</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+let allUsers = [];
+let currentFilter = 'all';
+
+function initAdminHeader(activeAdminPage) {
+  fetch('/api/me.php')
+    .then(r => {
+      if (!r.ok) throw new Error();
+      return r.json();
+    })
+    .then(user => {
+      const greeting = getGreeting();
+      
+      const navHTML = `
+        <span class="greeting">${greeting}, ${user.nickname || user.email}</span>
+        
+        <a href="/index.html" class="nav-link">Карта</a>
+        
+        <a href="/notifications.html" class="nav-link">
+          Уведомления
+          ${user.unread_notifications > 0 ? `
+            <span class="notif-badge">${user.unread_notifications}</span>
+          ` : ''}
+        </a>
+        
+        <a href="/feedback.html" class="nav-link">Обратная связь</a>
+        
+        <a href="/profile.html" class="nav-link">Профиль</a>
+
+        <div class="admin-dropdown">
+          <button class="admin-dropbtn">
+            Админ
+            <span class="admin-badge">⚙️</span>
+          </button>
+          <div class="admin-dropdown-content">
+            <a href="/admin/zones.html" class="${activeAdminPage === 'zones' ? 'active' : ''}">Зоны ремонта</a>
+            <a href="/admin/users.html" class="${activeAdminPage === 'users' ? 'active' : ''}">Пользователи</a>
+            <a href="/admin/feedback.html" class="${activeAdminPage === 'feedback' ? 'active' : ''}">Обратная связь</a>
+            <a href="/admin/broadcast.html" class="${activeAdminPage === 'broadcast' ? 'active' : ''}">Рассылка</a>
+          </div>
+        </div>
+        
+        <a href="/api/logout.php" class="nav-link">Выход</a>
+      `;
+      
+      document.getElementById('nav').innerHTML = navHTML;
+    })
+    .catch(() => {
+      window.location.href = '/login.html';
+    });
+}
+
+function getGreeting() {
+  const hour = new Date().getHours();
+  if (hour >= 5 && hour < 12) return 'Доброе утро';
+  if (hour >= 12 && hour < 17) return 'Добрый день';
+  if (hour >= 17 && hour < 23) return 'Добрый вечер';
+  return 'Доброй ночи';
+}
+
+function loadUsersStats() {
+  fetch('/api/admin/users_stats.php')
+    .then(r => {
+      if (!r.ok) throw new Error('Ошибка загрузки статистики');
+      return r.json();
+    })
+    .then(stats => {
+      document.getElementById('totalUsers').textContent = stats.total_users || 0;
+      document.getElementById('adminUsers').textContent = stats.admin_users || 0;
+      document.getElementById('regularUsers').textContent = stats.regular_users || 0;
+      document.getElementById('usersWithoutYard').textContent = stats.users_without_yard || 0;
+      document.getElementById('usersToday').textContent = stats.users_today || 0;
+      document.getElementById('usersWithNickname').textContent = stats.users_with_nickname || 0;
+    })
+    .catch(err => {
+      console.error('Ошибка загрузки статистики пользователей:', err);
+    });
+}
+
+function loadUsers() {
+  fetch('/api/admin/users.php')
+    .then(r => {
+      if (!r.ok) throw new Error('Ошибка загрузки');
+      return r.json();
+    })
+    .then(users => {
+      allUsers = users;
+      renderUsers(users);
+    })
+    .catch(err => {
+      console.error('Ошибка загрузки пользователей:', err);
+      const tbody = document.getElementById('users');
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="8" style="text-align: center; color: #C53030; padding: 40px;">
+            ❌ Ошибка загрузки данных
+          </td>
+        </tr>
+      `;
+    });
+}
+
+function renderUsers(users) {
+  const tbody = document.getElementById('users');
+  
+  if (!users || users.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="8" class="empty-state">
+          👥 Нет пользователей
+        </td>
+      </tr>
+    `;
+    return;
+  }
+
+  let html = '';
+  users.forEach(u => {
+    const initials = (u.nickname || u.email).charAt(0).toUpperCase();
+    const roleClass = u.role === 'admin' ? 'role-admin' : 'role-user';
+    const roleText = u.role === 'admin' ? 'Админ' : 'Пользователь';
+    
+    html += `
+      <tr>
+        <td><strong>#${u.id}</strong></td>
+        <td>
+          <div class="user-info">
+            <div class="user-avatar">${initials}</div>
+            <div>
+              <div style="font-weight: 500;">${u.nickname || '—'}</div>
+              <div style="font-size: 13px; color: #718096;">
+                ID: ${u.id}
+              </div>
+            </div>
+          </div>
+        </td>
+        <td>
+          <a href="mailto:${u.email}" style="color: #E53935;">
+            ${u.email}
+          </a>
+        </td>
+        <td>${u.address || '—'}</td>
+        <td>${u.yard_id || '—'}</td>
+        <td>
+          <span class="role-badge ${roleClass}">
+            ${roleText}
+          </span>
+        </td>
+        <td title="${new Date(u.created_at).toLocaleString('ru-RU')}">
+          ${new Date(u.created_at).toLocaleDateString('ru-RU')}<br>
+          <small style="color: #718096;">${new Date(u.created_at).toLocaleTimeString('ru-RU', {hour: '2-digit', minute:'2-digit'})}</small>
+        </td>
+      </tr>
+    `;
+  });
+  
+  tbody.innerHTML = html;
+}
+
+function filterUsers(filterType) {
+  currentFilter = filterType;
+  
+  document.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.classList.remove('active');
+  });
+  document.querySelector(`.filter-btn[onclick*="${filterType}"]`)?.classList.add('active');
+  
+  let filteredUsers = [];
+  
+  switch(filterType) {
+    case 'all':
+      filteredUsers = allUsers;
+      break;
+      
+    case 'admin':
+      filteredUsers = allUsers.filter(u => u.role === 'admin');
+      break;
+      
+    case 'user':
+      filteredUsers = allUsers.filter(u => u.role === 'user');
+      break;
+      
+    case 'no-yard':
+      filteredUsers = allUsers.filter(u => !u.yard_id || u.yard_id === '');
+      break;
+      
+    case 'today':
+      const today = new Date().toISOString().split('T')[0];
+      filteredUsers = allUsers.filter(u => u.created_at.startsWith(today));
+      break;
+      
+    case 'with-nickname':
+      filteredUsers = allUsers.filter(u => u.nickname && u.nickname.trim() !== '');
+      break;
+      
+    default:
+      filteredUsers = allUsers;
+  }
+  
+  renderUsers(filteredUsers);
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  loadUsersStats();
+  loadUsers();
+  
+  setInterval(function() {
+    loadUsersStats();
+    loadUsers().then(() => {
+      filterUsers(currentFilter);
+    });
+  }, 60000);
+});
+
+document.addEventListener('DOMContentLoaded', function() {
+  function showLandingCard() {
+    window.location.href = '/index.html';
+  }
+  
+  const logos = document.querySelectorAll('.logo');
+  logos.forEach(logo => {
+    logo.style.cursor = 'pointer';
+    logo.title = 'Перейти на главную';
+    logo.addEventListener('click', function(e) {
+      e.preventDefault();
+      showLandingCard();
+    });
+  });
+});
+</script>
+</body>
+</html>
