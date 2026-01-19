@@ -82,10 +82,18 @@ function initHeader(activePage) {
       if (!nav.dataset.initialized) {
         nav.innerHTML = `
           <div class="user-profile-header">
-            <img id="headerAvatar"
+            <a href="/profile.html" title="Перейти в профиль">
+              <img
+                id="headerAvatar"
+                class="user-avatar"
                 src="/uploads/avatars/Sun.jpg"
-                alt=""
-                class="user-avatar">
+                alt="Аватар"
+                width="40"
+                height="40"
+                loading="lazy"
+                decoding="async"
+              >
+            </a>
             <span id="headerGreeting" class="greeting"></span>
           </div>
           <a href="/index.html" class="nav-link ${activePage === 'map' ? 'active' : ''}">

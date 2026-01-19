@@ -39,7 +39,6 @@
 
       <button type="submit">Отправить</button>
     </form>
-
     <div id="feedbackNavigation" style="display:flex; gap:10px; margin-top: 20px;">
       <button id="newFeedbackBtn" class="button" style="display:none;">Новое обращение</button>
       <button id="myFeedbacksBtn" class="button" style="display:none;">Мои обращения</button>
@@ -84,15 +83,69 @@ function initHeader() {
       }
       
 
-      document.getElementById('nav').innerHTML = `
-        <span class="greeting">${getGreeting()}, ${user.nickname || user.email}</span>
-        <a href="/index.html" class="nav-link">Карта</a>
-        <a href="/notifications.html" class="nav-link">Уведомления</a>
-        <a href="/feedback.html" class="nav-link active">Обратная связь</a>
-        <a href="/profile.html" class="nav-link">Профиль</a>
-        ${adminLinks}
-        <a href="/api/logout.php" class="nav-link">Выход</a>
-      `;
+
+      const nav = document.getElementById('nav');
+
+      if (!nav.dataset.initialized) {
+        nav.innerHTML = `
+          <div class="user-profile-header">
+            <a href="/profile.html" title="Перейти в профиль">
+              <img
+                id="headerAvatar"
+                class="user-avatar"
+                src="/uploads/avatars/Sun.jpg"
+                alt="Аватар"
+                width="40"
+                height="40"
+                loading="lazy"
+                decoding="async"
+              >
+            </a>
+            <span id="headerGreeting" class="greeting"></span>
+          </div>
+
+          <a href="/index.html" class="nav-link">Карта</a>
+          <a href="/notifications.html" class="nav-link">Уведомления</a>
+          <a href="/feedback.html" class="nav-link active">Обратная связь</a>
+          <a href="/profile.html" class="nav-link">Профиль</a>
+          ${adminLinks}
+          <a href="/api/logout.php" class="nav-link">Выход</a>
+        `;
+        nav.dataset.initialized = '1';
+      }
+
+      const avatarImg = document.getElementById('headerAvatar');
+      const greetingEl = document.getElementById('headerGreeting');
+
+      const greeting = getGreeting();
+      if (greetingEl) {
+        greetingEl.textContent = `${greeting}, ${user.nickname || user.email}`;
+      }
+
+      const PLACEHOLDER = '/uploads/avatars/Sun.jpg';
+      let newSrc = PLACEHOLDER;
+
+      if (user.avatar_path && String(user.avatar_path).trim() !== '') {
+        newSrc = user.avatar_path.startsWith('http')
+          ? user.avatar_path
+          : location.origin + user.avatar_path;
+      }
+
+      // ❗ ключ: не переназначаем src, если он тот же
+      if (avatarImg && avatarImg.getAttribute('src') !== newSrc) {
+        avatarImg.setAttribute('src', newSrc);
+      }
+
+      // fallback без бесконечного цикла
+      if (avatarImg) {
+        avatarImg.onerror = () => {
+          if (avatarImg.dataset.fallbackDone) return;
+          avatarImg.dataset.fallbackDone = '1';
+          avatarImg.src = PLACEHOLDER;
+        };
+      }
+
+
     })
     .catch(() => {
       document.getElementById('nav').innerHTML = `

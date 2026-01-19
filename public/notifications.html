@@ -120,30 +120,58 @@
         '/uploads/avatars/Sun.jpg';
 
           
-          document.getElementById('nav').innerHTML = `
+        const nav = document.getElementById('nav');
 
-            <div class="user-profile-header">
-              <img src="${avatarPath}" alt="Аватар" class="user-avatar" 
-                  onerror="this.src='/uploads/avatars/Sun.jpg'">
-              <span class="greeting">${greeting}, ${user.nickname || user.email}</span>
-            </div>
-
-            <span class="greeting">${greeting}, ${user.nickname || user.email}</span>
+        if (!nav.dataset.initialized) {
+          nav.innerHTML = `
+          <div class="user-profile-header">
+            <a href="/profile.html" title="Перейти в профиль">
+              <img
+                id="headerAvatar"
+                class="user-avatar"
+                src="/uploads/avatars/Sun.jpg"
+                alt="Аватар"
+                width="40"
+                height="40"
+                loading="lazy"
+                decoding="async"
+              >
+            </a>
+            <span id="headerGreeting" class="greeting"></span>
+          </div>
 
             <a href="/index.html" class="nav-link ${activePage === 'index' ? 'active' : ''}">Карта</a>
-            <a href="/notifications.html" class="nav-link ${activePage === 'notifications' ? 'active' : ''}">
-              Уведомления
-            </a>
+            <a href="/notifications.html" class="nav-link ${activePage === 'notifications' ? 'active' : ''}">Уведомления</a>
             <a href="/feedback.html" class="nav-link ${activePage === 'feedback' ? 'active' : ''}">Обратная связь</a>
             <a href="/profile.html" class="nav-link ${activePage === 'profile' ? 'active' : ''}">Профиль</a>
-
             ${adminLinks}
-
             <a href="/api/logout.php" class="nav-link">Выход</a>
           `;
-          setTimeout(() => {
-            updateNotificationBadge();
-          }, 100);
+          nav.dataset.initialized = '1';
+        }
+
+        document.getElementById('headerGreeting').textContent = `${greeting}, ${user.nickname || user.email}`;
+
+        const avatarImg = document.getElementById('headerAvatar');
+        const PLACEHOLDER = '/uploads/avatars/Sun.jpg';
+        let newSrc = PLACEHOLDER;
+
+        if (user.avatar_path && String(user.avatar_path).trim() !== '') {
+          newSrc = user.avatar_path.startsWith('http')
+            ? user.avatar_path
+            : location.origin + user.avatar_path;
+        }
+
+        if (avatarImg.getAttribute('src') !== newSrc) {
+          avatarImg.setAttribute('src', newSrc);
+        }
+
+        avatarImg.onerror = () => {
+          if (avatarImg.dataset.fallbackDone) return;
+          avatarImg.dataset.fallbackDone = '1';
+          avatarImg.src = PLACEHOLDER;
+        };
+
         })
         .catch(() => {
           document.getElementById('nav').innerHTML = `
