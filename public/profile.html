@@ -15,7 +15,7 @@
 
         <form id="profileForm" enctype="multipart/form-data">
           <div class="avatar-block">
-            <img id="avatarPreview" src="/img/avatar-placeholder.png">
+            <img id="avatarPreview" src="/uploads/avatars/Sun.jpg" width="96" height="96" loading="lazy" decoding="async">
             <input type="file" name="avatar" id="avatarInput" accept="image/*">
           </div>
 
@@ -192,10 +192,23 @@ function loadProfile() {
         lat: user.lat || user.latitude || '',
         lon: user.lon || user.longitude || user.lng || ''
       };
-      if (user.avatar_path) {
-        document.getElementById('avatarPreview').src = 
-          user.avatar_path.startsWith('http') ? user.avatar_path : location.origin + user.avatar_path;
+      const avatarEl = document.getElementById('avatarPreview');
+      const PLACEHOLDER = '/uploads/avatars/Sun.jpg';
+
+      let newSrc = PLACEHOLDER;
+      if (user.avatar_path && String(user.avatar_path).trim() !== '') {
+        newSrc = user.avatar_path.startsWith('http')
+          ? user.avatar_path
+          : location.origin + user.avatar_path;
       }
+      if (avatarEl.src !== newSrc) {
+        avatarEl.src = newSrc;
+      }
+      avatarEl.onerror = () => {
+        if (avatarEl.dataset.fallbackDone) return;
+        avatarEl.dataset.fallbackDone = '1';
+        avatarEl.src = PLACEHOLDER;
+      };
       if (user.created_at) {
         document.getElementById('createdAt').innerText =
           'Дата регистрации: ' + new Date(user.created_at).toLocaleDateString('ru-RU');

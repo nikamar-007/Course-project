@@ -117,14 +117,14 @@
 
         const avatarPath = user.avatar_path ? 
         (user.avatar_path.startsWith('http') ? user.avatar_path : location.origin + user.avatar_path) :
-        '/img/avatar-placeholder.png';
+        '/uploads/avatars/Sun.jpg';
 
           
           document.getElementById('nav').innerHTML = `
 
             <div class="user-profile-header">
               <img src="${avatarPath}" alt="Аватар" class="user-avatar" 
-                  onerror="this.src='/img/avatar-placeholder.png'">
+                  onerror="this.src='/uploads/avatars/Sun.jpg'">
               <span class="greeting">${greeting}, ${user.nickname || user.email}</span>
             </div>
 

@@ -77,38 +77,57 @@ function initHeader(activePage) {
 
       const avatarPath = user.avatar_path ? 
         (user.avatar_path.startsWith('http') ? user.avatar_path : location.origin + user.avatar_path) :
-        '/img/avatar-placeholder.png';
+        '/uploads/avatars/Sun.jpg'
+      const nav = document.getElementById('nav');
+      if (!nav.dataset.initialized) {
+        nav.innerHTML = `
+          <div class="user-profile-header">
+            <img id="headerAvatar"
+                src="/uploads/avatars/Sun.jpg"
+                alt=""
+                class="user-avatar">
+            <span id="headerGreeting" class="greeting"></span>
+          </div>
+          <a href="/index.html" class="nav-link ${activePage === 'map' ? 'active' : ''}">
+            Карта
+          </a>
+          <a href="/notifications.html" class="nav-link ${activePage === 'notifications' ? 'active' : ''}">
+            Уведомления
+          </a>
+          <a href="/feedback.html" class="nav-link">Обратная связь</a>
+          <a href="/profile.html" class="nav-link ${activePage === 'profile' ? 'active' : ''}">
+            Профиль
+          </a>
+          ${adminLinks}
 
-      document.getElementById('nav').innerHTML = `
-        <div class="user-profile-header">
-          <img src="${avatarPath}" alt="Аватар" class="user-avatar" 
-              onerror="this.src='/img/avatar-placeholder.png'">
-          <span class="greeting">${greeting}, ${user.nickname || user.email}</span>
-        </div>
+          <a href="/api/logout.php" class="nav-link">Выход</a>
+        `;
+        nav.dataset.initialized = '1';
+      }
 
-        <a href="/index.html" class="nav-link ${activePage === 'map' ? 'active' : ''}">
-          Карта
-        </a>
+      const avatarImg = document.getElementById('headerAvatar');
+      const greetingEl = document.getElementById('headerGreeting');
 
-        <a href="/notifications.html" class="nav-link ${activePage === 'notifications' ? 'active' : ''}">
-          Уведомления
-          ${user.unread_notifications > 0 ? `
-            <span class="notif-badge">${user.unread_notifications}</span>
-          ` : ''}
-        </a>
+      greetingEl.textContent = `${greeting}, ${user.nickname || user.email}`;
 
-        <a href="/feedback.html" class="nav-link">
-          Обратная связь
-        </a>
+      const PLACEHOLDER = '/uploads/avatars/Sun.jpg';
+      let newSrc = PLACEHOLDER;
 
-        <a href="/profile.html" class="nav-link ${activePage === 'profile' ? 'active' : ''}">
-          Профиль
-        </a>
+      if (user.avatar_path && user.avatar_path.trim() !== '') {
+        newSrc = user.avatar_path.startsWith('http')
+          ? user.avatar_path
+          : location.origin + user.avatar_path;
+      }
+      if (avatarImg.getAttribute('src') !== newSrc) {
+        avatarImg.setAttribute('src', newSrc);
+      }
 
-        ${adminLinks}
+      avatarImg.onerror = () => {
+        if (avatarImg.dataset.fallback) return;
+        avatarImg.dataset.fallback = '1';
+        avatarImg.src = PLACEHOLDER;
+      };
 
-        <a href="/api/logout.php" class="nav-link">Выход</a>
-      `;
       
       isAuthenticated = true;
       window.userData = user;
