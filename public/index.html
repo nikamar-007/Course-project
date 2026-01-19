@@ -1263,7 +1263,7 @@ function saveZone() {
 
   const rawCoords = currentPolygon.geometry.getCoordinates();
   const fixedCoords = rawCoords.map(ring =>
-    ring.map(p => [p[1], p[0]]) 
+    ring.map(p => [p[1], p[0]])
   );
 
   fetch('/api/repair_zones.php', {
@@ -1279,7 +1279,14 @@ function saveZone() {
     })
   })
   .then(res => res.json())
-  .then(() => {
+  .then(data => {
+
+    if (data.error) {
+      showToast('Рисовать зону поверх другой зоны нельзя!', true);
+      updateStatus('❌ Рисовать зону поверх другой зоны нельзя');
+      return;
+    }
+
     updateStatus('Зона сохранена');
     map.geoObjects.remove(currentPolygon);
     currentPolygon = null;
