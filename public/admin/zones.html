@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <title>Админ — Ремонтные зоны</title>
   <link rel="stylesheet" href="/style.css">
-  <script src="js/init-landing.js" defer></script>
+  <script src="/js/init-landing.js" defer></script>
   <style>
     body {
       background: var(--bg-primary);
@@ -242,14 +242,14 @@ fetch('header-admin.html')
   .then(html => {
     document.getElementById('adminHeader').innerHTML = html;
     initAdminHeader('zones');
-  });
-
-document.querySelector('.logo').addEventListener('click', function(e) {
-    e.preventDefault();
-    if (typeof showLandingCard === 'function') {
-        showLandingCard();
+    const logo = document.querySelector('.logo');
+    if (logo) {
+      logo.addEventListener('click', function(e) {
+        e.preventDefault();
+        window.location.href = '/index.html';
+      });
     }
-});
+  });
 </script>
 
 <div class="admin-container">

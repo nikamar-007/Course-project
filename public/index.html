@@ -315,6 +315,7 @@ let isManualModeActive = false;
 let manualPlacemarks = [];
 let manualRoutePolyline = null;
 let manualRouteYandexRouter = null;
+let zonePolygonsById = {};
 ymaps.ready(init);
 
 function init() {
@@ -1176,6 +1177,7 @@ function showHomeByCoords(coords, address) {
 }
 
 function loadRepairZones() {
+  zonePolygonsById = {};
   fetch('/api/repair_zones.php')
     .then(res => {
       if (!res.ok) {
@@ -1258,17 +1260,35 @@ function loadRepairZones() {
           );
 
           map.geoObjects.add(polygon);
-
+          zonePolygonsById[String(z.id)] = polygon;
         } catch (e) {
           console.error('Ошибка при обработке зоны:', z, e);
         }
       });
-
+      focusZoneFromUrl();
     })
     .catch(err => {
       console.error('Ошибка загрузки зон:', err);
       showAlert('Не удалось загрузить зоны ремонта', 'error', 'Ошибка');
     });
+}
+
+function focusZoneFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  const zoneId = params.get('zone');
+  if (!zoneId) return;
+  const polygon = zonePolygonsById[String(zoneId)];
+  if (!polygon) {
+    console.warn('Зона из URL не найдена среди загруженных:', zoneId);
+    return;
+  }
+  map.setBounds(polygon.geometry.getBounds(), {
+    checkZoomRange: true,
+    zoomMargin: 40
+  });
+  setTimeout(() => {
+    try { polygon.balloon.open(); } catch (e) {}
+  }, 400);
 }
 
 function startDrawingZone() {
