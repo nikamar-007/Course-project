@@ -199,6 +199,38 @@
       padding: 60px 20px;
       color: #A0AEC0;
     }
+
+    .filters {
+    background: white;
+    padding: 15px 20px;
+    border-radius: 12px;
+    margin-bottom: 20px;
+    display: flex;
+    gap: 15px;
+    align-items: center;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.filter-btn {
+    padding: 8px 16px;
+    border-radius: 20px;
+    border: 1px solid #E2E8F0;
+    background: white;
+    color: #4A5568;
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.2s;
+}
+
+.filter-btn:hover {
+    background: #F7FAFC;
+}
+
+.filter-btn.active {
+    background: #E53935;
+    color: white;
+    border-color: #E53935;
+}
   </style>
 </head>
 <body>
@@ -222,31 +254,40 @@ document.querySelector('.logo').addEventListener('click', function(e) {
 
 <div class="admin-container">
   <div class="zones-stats" id="zonesStats">
-    <div class="stat-card total">
-      <div class="stat-number" id="totalZones">0</div>
-      <div class="stat-label">Всего зон</div>
-      <div class="stat-details">Всего записей в системе</div>
+    <div class="stat-card total" onclick="filterZones('all')">
+        <div class="stat-number" id="totalZones">0</div>
+        <div class="stat-label">Всего зон</div>
+        <div class="stat-details">Всего записей в системе</div>
     </div>
-    <div class="stat-card pending">
-      <div class="stat-number" id="pendingZones">0</div>
-      <div class="stat-label">Ожидают подтверждения (серые)</div>
-      <div class="stat-details">0 подтверждений, созданы менее 24 часов назад</div>
+    <div class="stat-card pending" onclick="filterZones('pending')">
+        <div class="stat-number" id="pendingZones">0</div>
+        <div class="stat-label">Ожидают подтверждения (серые)</div>
+        <div class="stat-details">0 подтверждений, созданы менее 24 часов назад</div>
     </div>
-    <div class="stat-card active-red">
-      <div class="stat-number" id="activeRedZones">0</div>
-      <div class="stat-label">Активные красные</div>
-      <div class="stat-details">≥1 подтверждение, созданы ≤7 дней назад</div>
+    <div class="stat-card active-red" onclick="filterZones('active-red')">
+        <div class="stat-number" id="activeRedZones">0</div>
+        <div class="stat-label">Активные красные</div>
+        <div class="stat-details">≥1 подтверждение, созданы ≤7 дней назад</div>
     </div>
-    <div class="stat-card active-yellow">
-      <div class="stat-number" id="activeYellowZones">0</div>
-      <div class="stat-label">Активные желтые</div>
-      <div class="stat-details">≥1 подтверждение, созданы 7-14 дней назад</div>
+    <div class="stat-card active-yellow" onclick="filterZones('active-yellow')">
+        <div class="stat-number" id="activeYellowZones">0</div>
+        <div class="stat-label">Активные желтые</div>
+        <div class="stat-details">≥1 подтверждение, созданы 7-14 дней назад</div>
     </div>
-    <div class="stat-card expired-green">
-      <div class="stat-number" id="expiredGreenZones">0</div>
-      <div class="stat-label">Просроченные зеленые</div>
-      <div class="stat-details">>14 дней, требуют подтверждений</div>
+    <div class="stat-card expired-green" onclick="filterZones('expired-green')">
+        <div class="stat-number" id="expiredGreenZones">0</div>
+        <div class="stat-label">Просроченные зеленые</div>
+        <div class="stat-details">>14 дней, требуют подтверждений</div>
     </div>
+  </div>
+  <div class="filters">
+      <span style="font-weight: 500; color: #4A5568;">Фильтры:</span>
+      <button class="filter-btn active" onclick="filterZones('all')">Все</button>
+      <button class="filter-btn" onclick="filterZones('pending')">Ожидают подтверждения</button>
+      <button class="filter-btn" onclick="filterZones('active-red')">Активные красные</button>
+      <button class="filter-btn" onclick="filterZones('active-yellow')">Активные желтые</button>
+      <button class="filter-btn" onclick="filterZones('expired-green')">Просроченные зеленые</button>
+      <button class="filter-btn" onclick="filterZones('deleted')">Удаленные</button>
   </div>
   <div class="admin-table-wrapper">
     <table class="admin-table">
@@ -507,5 +548,199 @@ document.addEventListener('DOMContentLoaded', function() {
     }, 1000);
 });
 </script>
+
+<script>
+let allZones = [];
+let currentFilter = 'all';
+
+function getZoneStatus(z) {
+    if (!z.is_active) {
+        return 'deleted';
+    } else if (z.confirm_count === 0 && new Date(z.created_at) >= new Date(Date.now() - 24*60*60*1000)) {
+        return 'pending';
+    } else if (z.confirm_count > 0 && new Date(z.created_at) >= new Date(Date.now() - 7*24*60*60*1000)) {
+        return 'active-red';
+    } else if (z.confirm_count > 0 && new Date(z.created_at) >= new Date(Date.now() - 14*24*60*60*1000)) {
+        return 'active-yellow';
+    } else if (z.confirm_count > 0 && z.last_confirmed_at && new Date(z.last_confirmed_at) >= new Date(Date.now() - 24*60*60*1000)) {
+        return 'expired-green';
+    } else {
+        return 'deleted';
+    }
+}
+function filterZones(filterType) {
+    currentFilter = filterType;
+    
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    document.querySelector(`.filter-btn[onclick*="${filterType}"]`)?.classList.add('active');
+    
+    let filteredZones = [];
+    
+    switch(filterType) {
+        case 'all':
+            filteredZones = allZones;
+            break;
+            
+        case 'pending':
+            filteredZones = allZones.filter(z => getZoneStatus(z) === 'pending');
+            break;
+            
+        case 'active-red':
+            filteredZones = allZones.filter(z => getZoneStatus(z) === 'active-red');
+            break;
+            
+        case 'active-yellow':
+            filteredZones = allZones.filter(z => getZoneStatus(z) === 'active-yellow');
+            break;
+            
+        case 'expired-green':
+            filteredZones = allZones.filter(z => getZoneStatus(z) === 'expired-green');
+            break;
+            
+        case 'deleted':
+            filteredZones = allZones.filter(z => getZoneStatus(z) === 'deleted');
+            break;
+            
+        default:
+            filteredZones = allZones;
+    }
+    
+    renderZonesTable(filteredZones);
+}
+
+function loadZones() {
+    fetch('/api/admin/zones.php')
+        .then(r => {
+            if (!r.ok) throw new Error('Ошибка загрузки');
+            return r.json();
+        })
+        .then(zones => {
+            allZones = zones;
+            renderZonesTable(zones);
+        })
+        .catch(err => {
+            console.error('Ошибка загрузки зон:', err);
+            const tbody = document.getElementById('zones');
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="8" style="text-align: center; color: #C53030; padding: 40px;">
+                        ❌ Ошибка загрузки данных
+                    </td>
+                </tr>
+            `;
+        });
+}
+function renderZonesTable(zones) {
+    const tbody = document.getElementById('zones');
+    
+    if (!zones || zones.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="8" class="empty-state">
+                    📭 Нет зон ремонта
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
+    let html = '';
+    zones.forEach(z => {
+        let statusClass = '';
+        let statusText = '';
+        const status = getZoneStatus(z);
+
+        switch(status) {
+            case 'deleted':
+                statusClass = 'status-deleted';
+                statusText = 'Удалена';
+                break;
+            case 'pending':
+                statusClass = 'status-pending';
+                statusText = 'Ожидает подтверждения';
+                break;
+            case 'active-red':
+                statusClass = 'status-active-red';
+                statusText = 'Активная красная';
+                break;
+            case 'active-yellow':
+                statusClass = 'status-active-yellow';
+                statusText = 'Активная желтая';
+                break;
+            case 'expired-green':
+                statusClass = 'status-expired-green';
+                statusText = 'Просроченная зеленая';
+                break;
+            default:
+                statusClass = 'status-deleted';
+                statusText = 'Неактивна';
+        }
+        
+        html += `
+            <tr>
+                <td><strong>#${z.id}</strong></td>
+                <td>${z.description || '—'}</td>
+                <td>
+                    ${z.creator_id ? `
+                        <a href="/profile.html?user=${z.creator_id}" style="color: #2196F3;">
+                            ${z.nickname || z.email || `Пользователь #${z.creator_id}`}
+                        </a>
+                    ` : '—'}
+                </td>
+                <td>${new Date(z.created_at).toLocaleDateString('ru-RU')} ${new Date(z.created_at).toLocaleTimeString('ru-RU', {hour: '2-digit', minute: '2-digit'})}</td>
+                <td><strong>${z.confirm_count}</strong></td>
+                <td>${z.last_confirmed_at ? new Date(z.last_confirmed_at).toLocaleDateString('ru-RU') + ' ' + new Date(z.last_confirmed_at).toLocaleTimeString('ru-RU', {hour: '2-digit', minute: '2-digit'}) : '—'}</td>
+                <td>
+                    <span class="status-badge ${statusClass}" title="${status}">
+                        ${statusText}
+                    </span>
+                </td>
+                <td>
+                    <div class="table-actions">
+                        <a href="/index.html?zone=${z.id}&tab=map" class="btn-view" title="Посмотреть на карте">
+                            👁 Показать
+                        </a>
+                        ${z.is_active ? `
+                            <button onclick="deleteZone(${z.id})" class="btn-delete" title="Удалить зону">
+                                🗑️ Удалить
+                            </button>
+                        ` : ''}
+                    </div>
+                </td>
+            </tr>
+        `;
+    });
+    
+    tbody.innerHTML = html;
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    loadZonesStats();
+    loadZones();
+    document.querySelectorAll('.stat-card').forEach(card => {
+        const type = Array.from(card.classList).find(cls => 
+            ['total', 'pending', 'active-red', 'active-yellow', 'expired-green'].includes(cls)
+        );
+        if (type) {
+            card.style.cursor = 'pointer';
+            card.addEventListener('click', () => {
+                if (type === 'total') {
+                    filterZones('all');
+                } else {
+                    filterZones(type);
+                }
+            });
+        }
+    });
+    setInterval(function() {
+        loadZonesStats();
+        loadZones();
+        filterZones(currentFilter);
+    }, 30000);
+});
+</script>
+
 </body>
 </html>
