@@ -9,7 +9,8 @@ $stmt = $pdo->query("
     f.message,
     f.created_at,
     f.admin_reply,
-    u.email
+    u.email,
+    u.nickname AS nickname
   FROM feedback f
   LEFT JOIN users u ON u.id = f.user_id
   ORDER BY f.created_at DESC
