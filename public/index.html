@@ -465,6 +465,9 @@ async function buildSimpleRoute() {
   );
 
   map.geoObjects.add(multiRouter);
+  multiRouter.getWayPoints().options.set('draggable', true);
+  multiRouter.options.set('wayPointDraggable', true);
+  multiRouter.options.set('viaPointDraggable', true);
 
   multiRouter.model.events.add('requestsuccess', async () => {
     console.log('Маршрут успешно построен');
@@ -648,19 +651,18 @@ function startManualRoute() {
   clearManualRoute();
   const startCoords = pointA.geometry.getCoordinates();
   const endCoords = pointB.geometry.getCoordinates();
-  const startPlacemark = new ymaps.Placemark(startCoords, {
-    balloonContent: 'Начало маршрута'
-  }, {
-    preset: 'islands#redCircleDotIcon',
-    draggable: false
-  });
-  
-  const endPlacemark = new ymaps.Placemark(endCoords, {
-    balloonContent: 'Конец маршрута'
-  }, {
-    preset: 'islands#yellowCircleDotIcon',
-    draggable: false
-  });
+ const startPlacemark = new ymaps.Placemark(startCoords, {
+  balloonContent: 'Начало маршрута'
+}, {
+  preset: 'islands#redCircleDotIcon',
+  draggable: true
+});
+const endPlacemark = new ymaps.Placemark(endCoords, {
+  balloonContent: 'Конец маршрута'
+}, {
+  preset: 'islands#yellowCircleDotIcon',
+  draggable: true
+});
   
   map.geoObjects.add(startPlacemark);
   map.geoObjects.add(endPlacemark);
@@ -671,7 +673,29 @@ function startManualRoute() {
         { coords: startCoords, address: startAddress, type: 'start', placemark: startPlacemark },
         { coords: endCoords, address: endAddress, type: 'end', placemark: endPlacemark }
       ];
-      
+      startPlacemark.events.add('dragend', () => {
+      const newCoords = startPlacemark.geometry.getCoordinates();
+      const idx = manualRoutePoints.findIndex(p => p.type === 'start');
+      if (idx !== -1) manualRoutePoints[idx].coords = newCoords;
+
+      reverseGeocode(newCoords, (addr) => {
+        if (idx !== -1) manualRoutePoints[idx].address = addr;
+        updateManualPointsList();
+        buildManualRouteYandex();
+      });
+    });
+
+    endPlacemark.events.add('dragend', () => {
+      const newCoords = endPlacemark.geometry.getCoordinates();
+      const idx = manualRoutePoints.findIndex(p => p.type === 'end');
+      if (idx !== -1) manualRoutePoints[idx].coords = newCoords;
+
+      reverseGeocode(newCoords, (addr) => {
+        if (idx !== -1) manualRoutePoints[idx].address = addr;
+        updateManualPointsList();
+        buildManualRouteYandex();
+      });
+    });
       updateManualPointsList();
       buildManualRouteYandex();
     });
@@ -819,6 +843,10 @@ async function buildManualRouteYandex() {
   );
 
   map.geoObjects.add(manualRouteYandexRouter);
+  manualRouteYandexRouter.getWayPoints().options.set('draggable', true);
+  manualRouteYandexRouter.getWayPoints().events.add('dragend', () => {
+    updateStatus('🔄 Перестраиваю ручной маршрут...');
+  });
 
   manualRouteYandexRouter.model.events.add('requestsuccess', async () => {
     const route = manualRouteYandexRouter.getRoutes().get(0);
@@ -1029,7 +1057,8 @@ function setPoint(type, coords, address) {
     balloonContent: `${type === 'A' ? 'Начало' : 'Конец'}: ${address}`
   }, {
     preset: type === 'A' ? 'islands#redCircleDotIcon' : 'islands#yellowCircleDotIcon',
-    draggable: true
+    draggable: true,
+    zIndex: 9999
   });
 
   pm.events.add('dragend', () => {
