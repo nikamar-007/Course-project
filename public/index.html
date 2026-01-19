@@ -12,6 +12,7 @@
 <body>
 <div class="map-container">
   <div id="map"></div>
+  <div id="routeAlerts"></div>
 </div>
 
 <div id="landingCardContainer"></div>
@@ -598,15 +599,18 @@ function drawElevationChart(data, canvasId) {
 function showRouteWarning(checkResult) {
   const warningDiv = document.getElementById('routeWarning');
   const warningContent = document.getElementById('warningContent');
-  
+  const container = document.getElementById('routeAlerts');
+
   warningContent.innerHTML = `
     <p>${checkResult.message}</p>
     <p>Количество пересечений: <strong>${checkResult.count || 1}</strong></p>
     <p>Рекомендуем обойти эти зоны для вашей безопасности.</p>
   `;
-  
+
+  container.appendChild(warningDiv);
   warningDiv.style.display = 'block';
 }
+
 
 function hideRouteWarning() {
   document.getElementById('routeWarning').style.display = 'none';
@@ -868,15 +872,18 @@ async function checkManualRoute() {
 function showManualRouteWarning(checkResult) {
   const warningDiv = document.getElementById('manualRouteWarning');
   const warningContent = document.getElementById('manualWarningContent');
-  
+  const container = document.getElementById('routeAlerts');
+
   warningContent.innerHTML = `
     <p>${checkResult.message}</p>
     <p>Количество пересечений: <strong>${checkResult.count || 1}</strong></p>
     <p>Добавьте больше точек, чтобы обойти ремонтные зоны.</p>
   `;
-  
+
+  container.appendChild(warningDiv);
   warningDiv.style.display = 'block';
 }
+
 
 function hideManualRouteWarning() {
   document.getElementById('manualRouteWarning').style.display = 'none';
@@ -922,6 +929,11 @@ function clearManualRoute() {
 }
 
 async function checkRouteIntersects(routeGeoJSON) {
+  if (!routeGeoJSON || !routeGeoJSON.coordinates || routeGeoJSON.coordinates.length < 2) {
+    showToast('Не удалось получить линию маршрута для проверки', true);
+    return { intersects: false, message: 'Маршрут не проверен: пустая геометрия' };
+  }
+
   try {
     console.log('Отправка запроса на проверку маршрута:', routeGeoJSON);
     const response = await fetch('/api/check_route.php', {
@@ -949,36 +961,40 @@ async function checkRouteIntersects(routeGeoJSON) {
 
 function extractRouteGeoJSON(route) {
   const coords = [];
-  
+
   try {
     const paths = route.getPaths();
     if (!paths) {
       console.warn('Маршрут не содержит путей');
-      return {
-        type: 'LineString',
-        coordinates: coords
-      };
+      return { type: 'LineString', coordinates: coords };
     }
-    
     paths.each((path) => {
-      const geometry = path.geometry;
-      if (geometry && geometry.getType() === 'LineString') {
-        const pathCoords = geometry.getCoordinates();
-        if (pathCoords && Array.isArray(pathCoords)) {
-          pathCoords.forEach((coord) => {
-            coords.push([coord[1], coord[0]]);
-          });
-        }
-      }
-    });
-  } catch (error) {
-    console.error('Ошибка извлечения GeoJSON из маршрута:', error);
-  }
+      const segments = path.getSegments && path.getSegments();
+      if (!segments) return;
 
-  return {
-    type: 'LineString',
-    coordinates: coords
-  };
+      segments.each((segment) => {
+        const g = segment.geometry;
+        if (!g || !g.getCoordinates) return;
+
+        const segCoords = g.getCoordinates(); 
+        if (!Array.isArray(segCoords)) return;
+
+        segCoords.forEach((c) => {
+          if (Array.isArray(c) && c.length >= 2) {
+            coords.push([c[1], c[0]]);
+          }
+        });
+      });
+    });
+  } catch (e) {
+    console.error('Ошибка извлечения GeoJSON из маршрута:', e);
+  }
+  const out = [];
+  for (const c of coords) {
+    const last = out[out.length - 1];
+    if (!last || last[0] !== c[0] || last[1] !== c[1]) out.push(c);
+  }
+  return { type: 'LineString', coordinates: out };
 }
 
 function clearRouteVisuals() {

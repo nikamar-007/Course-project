@@ -2555,3 +2555,30 @@ body.profile-card-hover #map {
   font-size: 14px;
 }
 
+#routeAlerts {
+  position: fixed;
+  top: 90px;           
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1500;        
+  width: calc(100% - 40px);
+  max-width: 520px;
+  pointer-events: none;  
+}
+
+#routeAlerts .route-warning {
+  pointer-events: auto;  
+  margin-bottom: 12px;
+  animation: slideDown 0.3s ease;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-15px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
