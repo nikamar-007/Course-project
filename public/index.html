@@ -165,7 +165,7 @@ function initHeader(activePage) {
 <button id="openPanelBtn">☰</button>
   
 <button id="myHomeBtn" class="my-home-btn" title="Показать мой дом на карте">
-  <span style="font-size: 12px; margin-right: 3px;">🏠</span> Мой дом
+  <span style="font-size: 12px; margin-right: 3px;"></span> Мой дом
 </button>
 <div class="panel">
   <div class="panel-header">
@@ -1062,13 +1062,11 @@ function updateStatus(text) {
 function checkAndShowHomeButton() {
   const btn = document.getElementById('myHomeBtn');
   if (!btn) return;
-  
-  if (isAuthenticated && window.userData && window.userData.addres) {
-    btn.style.display = 'block';
-    btn.style.opacity = '1';
-    btn.style.transform = 'translateY(0)';
+
+  if (isAuthenticated && window.userData && window.userData.address) {
+    btn.classList.add('show');
   } else {
-    btn.style.display = 'none';
+    btn.classList.remove('show');
   }
 }
 
@@ -1082,7 +1080,7 @@ function showMyHome() {
     map.geoObjects.remove(userHomePlacemark);
   }
 
-  const address = window.userData.addres;
+  const address = window.userData.address;
 
   if (address) {
     showHomeByAddress(address);
@@ -1111,7 +1109,7 @@ function showHomeByAddress(address) {
 
 function showHomeByCoords(coords, address) {
   userHomePlacemark = new ymaps.Placemark(coords, {
-    balloonContent: `🏠 Мой дом: ${address || 'Адрес не указан'}`,
+    balloonContent: `Мой дом: ${address || 'Адрес не указан'}`,
     hintContent: 'Мой дом'
   }, {
     preset: 'islands#homeIcon',
