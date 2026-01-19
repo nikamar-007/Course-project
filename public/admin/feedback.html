@@ -261,7 +261,33 @@
     }
     
     .file-link:hover {
-      background: #E2E8F0;
+      background: #f27469;
+    }
+    .success-message {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: #ecf387;
+      color: rgb(247, 131, 131);
+      padding: 15px 20px;
+      border-radius: 8px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      animation: slideInRight 0.3s ease;
+    }
+
+    @keyframes slideInRight {
+      from {
+        transform: translateX(100%);
+        opacity: 0;
+      }
+      to {
+        transform: translateX(0);
+        opacity: 1;
+      }
     }
   </style>
 </head>
@@ -278,7 +304,6 @@ fetch('header-admin.html')
 </script>
 
 <div class="admin-container">
-  <!-- Статистика обратной связи -->
   <div class="zones-stats" id="feedbackStats">
     <div class="stat-card total" onclick="filterFeedback('all')">
       <div class="stat-number" id="totalFeedback">0</div>
@@ -400,6 +425,36 @@ function getGreeting() {
   if (hour >= 12 && hour < 17) return 'Добрый день';
   if (hour >= 17 && hour < 23) return 'Добрый вечер';
   return 'Доброй ночи';
+}
+
+function showSuccessMessage(message) {
+  const existingMessage = document.querySelector('.success-message');
+  if (existingMessage) {
+    existingMessage.remove();
+  }
+  
+  const successDiv = document.createElement('div');
+  successDiv.className = 'success-message';
+  successDiv.innerHTML = `
+    <div style="display: flex; align-items: center; gap: 10px;">
+      <span style="font-size: 18px;">✅</span>
+      <span>${message}</span>
+    </div>
+  `;
+  
+  document.body.appendChild(successDiv);
+
+  setTimeout(() => {
+    if (successDiv.parentNode) {
+      successDiv.style.opacity = '0';
+      successDiv.style.transform = 'translateX(100%)';
+      setTimeout(() => {
+        if (successDiv.parentNode) {
+          successDiv.remove();
+        }
+      }, 3000);
+    }
+  }, 3000);
 }
 
 function loadFeedbackStats() {
@@ -640,7 +695,7 @@ async function sendReply(id) {
 
   const button = textarea.nextElementSibling;
   const originalText = button.textContent;
-  button.textContent = 'Отправка...';
+  button.textContent = '⏳ Отправка...';
   button.disabled = true;
   textarea.disabled = true;
 
@@ -665,14 +720,11 @@ async function sendReply(id) {
     }
 
     if (result.success || result.message) {
-      await loadFeedbackStats();
-      await reloadFeedbackAndApplyFilter();
+      showSuccessMessage(result.message || 'Ответ успешно отправлен!');
       
-      if (result.message) {
-        alert(result.message);
-      } else {
-        alert('Ответ успешно отправлен!');
-      }
+      setTimeout(() => {
+        location.reload();
+      }, 1500);
     } else {
       throw new Error(result.error || 'Неизвестная ошибка');
     }
@@ -773,14 +825,10 @@ function markAsSpam(id) {
   .then(r => r.json())
   .then(async result => {
     if (result.success) {
-      alert('Обращение помечено как спам');
-      try {
-        await loadFeedbackStats();
-        await loadFeedback();
-        filterFeedback(currentFilter);
-      } catch (err) {
-        console.error('Ошибка при обновлении данных:', err);
-      }
+      showSuccessMessage('Обращение помечено как спам');
+      setTimeout(() => {
+        location.reload();
+      }, 1500);
     } else {
       alert('Ошибка: ' + result.error);
     }
@@ -799,14 +847,10 @@ function deleteFeedback(id) {
   .then(r => r.json())
   .then(async result => {
     if (result.success) {
-      alert('Обращение удалено');
-      try {
-        await loadFeedbackStats();
-        await loadFeedback();
-        filterFeedback(currentFilter);
-      } catch (err) {
-        console.error('Ошибка при обновлении данных:', err);
-      }
+      showSuccessMessage('Обращение удалено');
+      setTimeout(() => {
+        location.reload();
+      }, 1500);
     } else {
       alert('Ошибка: ' + result.error);
     }
@@ -816,6 +860,5 @@ function deleteFeedback(id) {
   });
 }
 </script>
-
 </body>
 </html>
