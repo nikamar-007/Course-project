@@ -83,17 +83,6 @@ $stmt->execute([$email, $hash, $nickname, $yard_id, $address]);
 
 $user = $stmt->fetch();
 
-$attachStmt = $pdo->prepare("
-  INSERT INTO user_yards (user_id, yard_id)
-  VALUES (:user_id, :yard_id)
-  ON CONFLICT DO NOTHING
-");
-
-$attachStmt->execute([
-  'user_id' => $user['id'],
-  'yard_id' => $yard_id
-]);
-
 $_SESSION['user_id'] = $user['id'];
 $_SESSION['role'] = $user['role'];
 

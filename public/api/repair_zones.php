@@ -217,10 +217,10 @@ try {
 
             foreach ($yardIds as $yardId) {
                 $usersStmt = $pdo->prepare("
-                    SELECT DISTINCT user_id
-                    FROM user_yards
+                    SELECT id
+                    FROM users
                     WHERE yard_id = :yard_id
-                      AND user_id != :creator_id
+                    AND id != :creator_id
                 ");
                 $usersStmt->execute([
                     'yard_id'     => $yardId,
