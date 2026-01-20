@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <title>Уведомления</title>
   <link rel="stylesheet" href="/style.css">
-  <script src="js/init-landing.js" defer></script>
+  <script src="/js/init-landing.js" defer></script>
   <style>
     .notif-badge {
         display: inline-block;
@@ -210,8 +210,21 @@
         await markAllNotificationsAsRead();
         box.innerHTML = list.map(n => {
           const isFeedback = n.source === 'feedback';
-        
           const showZoneLink = n.link && !isFeedback;
+
+          const extractZoneId = (link) => {
+            try {
+              const u = new URL(link, location.origin);
+              const sp = u.searchParams;
+              return sp.get('zone') || sp.get('zone_id') || sp.get('id') || sp.get('zoneId');
+            } catch (e) {
+              const m = String(link).match(/(?:zone|zone_id|id|zoneId)=(\d+)/i);
+              return m ? m[1] : null;
+            }
+          };
+
+          const zoneId = showZoneLink ? extractZoneId(n.link) : null;
+          const zoneHref = zoneId ? `/index.html?zone=${zoneId}` : (n.link || '/index.html');
 
           return `
             <div class="notification-item ${isFeedback ? 'feedback-reply' : ''}">
@@ -240,7 +253,7 @@
                 ` : ''}
                 
                 ${showZoneLink ? `
-                  <a href="${n.link}" class="zone-link">
+                  <a href="${zoneHref}" class="zone-link">
                     Посмотреть зону на карте
                   </a>
                 ` : ''}
