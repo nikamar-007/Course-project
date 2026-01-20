@@ -45,14 +45,45 @@
           <input type="password" name="password_repeat" autocomplete="new-password">
 
           <div id="createdAt"></div>
-
           <div class="profile-actions">
-            <button type="submit">Сохранить</button>
-            <button type="button" id="cancelBtn">Отмена</button>
+              <button type="submit">Сохранить</button>
+              <button type="button" id="cancelBtn">Отмена</button>
+              <button type="button" id="myZonesBtn">Мои зоны</button>
+              <button type="button" id="zonesInMyYardBtn">Зоны в моем дворе</button>
           </div>
         </form>
       </div>
     </div>
+<div id="myZonesModal" class="zones-modal">
+    <div class="zones-modal-content">
+        <span class="zones-modal-close">&times;</span>
+        <h2>Мои зоны</h2>
+        <div id="myZonesList" class="zones-list"></div>
+    </div>
+</div>
+<div id="yardZonesModal" class="zones-modal">
+    <div class="zones-modal-content">
+        <span class="zones-modal-close">&times;</span>
+        <h2>Зоны в моем дворе</h2>
+        <div id="yardZonesList" class="zones-list"></div>
+    </div>
+</div>
+<div id="editZoneModal" class="zones-modal">
+    <div class="zones-modal-content">
+        <span class="zones-modal-close">&times;</span>
+        <h2>Редактировать зону</h2>
+        <div id="editZoneContent">
+            <div id="editMap" style="height: 300px; margin-bottom: 20px;"></div>
+            <label>Описание:</label>
+            <textarea id="editZoneDescription" placeholder="Опишите проблему..." rows="4"></textarea>
+            <div class="edit-zone-actions">
+                <button id="saveZoneChanges">Сохранить изменения</button>
+                <button id="cancelZoneEdit" class="btn-yellow">Отмена</button>
+                <button id="deleteZone" class="btn-danger">Удалить зону</button>
+            </div>
+        </div>
+    </div>
+</div>
 
 <div id="footer"></div>
     <script>
@@ -71,7 +102,23 @@
   </script>
     <div id="toast" class="toast"></div>
 
-
+<script>
+fetch('/api/me.php')
+    .then(r => {
+        console.log('Статус авторизации:', r.status);
+        if (!r.ok) {
+            console.log('Пользователь не авторизован');
+        }
+        return r.json();
+    })
+    .then(user => {
+        console.log('Данные пользователя:', user);
+        window.userData = user;
+    })
+    .catch(error => {
+        console.log('Ошибка проверки авторизации:', error);
+    });
+</script>
 <script>
 fetch('/header.html')
   .then(r => r.text())
@@ -141,17 +188,16 @@ function initHeader(activePage) {
 
 <script>
 function showToast(text, isError = false) {
-  const el = document.getElementById('map-toast') || document.getElementById('toast');
-  if (!el) return;
-  
-  el.textContent = text;
-  el.className = isError ? 'toast error show' : 'toast show';
-  
-  setTimeout(() => {
-    el.classList.remove('show');
-  }, 3000);
+    const toast = document.getElementById('toast') || document.getElementById('map-toast');
+    if (!toast) return;
+    toast.textContent = text;
+    toast.className = isError ? 'toast error show' : 'toast show';
+    setTimeout(() => {
+        toast.classList.remove('show');
+    }, 3000);
 }
 
+let windowUserData = null;
 let initialProfileState = null;
 let originalFormData = {};
 let selectedCoords = null;
@@ -178,6 +224,7 @@ function loadProfile() {
       return r.json();
     })
     .then(user => {
+      window.userData = user; 
       console.log('User data loaded:', user);
       document.getElementById('email').value = user.email || '';
       document.getElementById('nickname').value = user.nickname || '';
@@ -546,7 +593,7 @@ ymaps.ready(() => {
       suggest: (request, options) => {
         return ymaps.geocode(request, {
           results: 10,
-          boundedBy: [[55.0, 36.8], [56.2, 38.2]], // Москва + ближнее Подмосковье
+          boundedBy: [[55.0, 36.8], [56.2, 38.2]], 
           strictBounds: true
         }).then(res => {
           const items = [];
@@ -785,6 +832,475 @@ window.addEventListener('load', function() {
 });
 </script>
 
+<script>
+function checkApiEndpoints() {
+    const endpoints = [
+        '/api/my_zones.php',
+        '/api/zones_in_my_yard.php',
+        '/api/repair_zones.php'
+    ];
+    
+    endpoints.forEach(endpoint => {
+        fetch(endpoint, { method: 'HEAD' })
+            .then(response => {
+                console.log(`${endpoint}: ${response.ok ? 'OK' : 'ERROR'} (${response.status})`);
+            })
+            .catch(error => {
+                console.error(`${endpoint}: ${error.message}`);
+            });
+    });
+}
 
+let myZones = [];
+let yardZones = [];
+let editingZoneId = null;
+let editZoneMap = null;
+let editZonePolygon = null;
+
+document.addEventListener('DOMContentLoaded', function() {
+    document.getElementById('myZonesBtn').addEventListener('click', function() {
+        loadMyZones();
+        document.getElementById('myZonesModal').style.display = 'block';
+    });
+    
+    document.getElementById('zonesInMyYardBtn').addEventListener('click', function() {
+        loadZonesInMyYard();
+        document.getElementById('yardZonesModal').style.display = 'block';
+    });
+    
+    document.querySelectorAll('.zones-modal-close').forEach(closeBtn => {
+        closeBtn.addEventListener('click', function() {
+            this.closest('.zones-modal').style.display = 'none';
+        });
+    });
+    
+    window.addEventListener('click', function(event) {
+        if (event.target.classList.contains('zones-modal')) {
+            event.target.style.display = 'none';
+        }
+    });
+    
+    document.getElementById('saveZoneChanges').addEventListener('click', saveZoneChanges);
+    document.getElementById('cancelZoneEdit').addEventListener('click', function() {
+        document.getElementById('editZoneModal').style.display = 'none';
+        if (editZonePolygon && editZonePolygon.editor) {
+            editZonePolygon.editor.stopEditing();
+        }
+    });
+    document.getElementById('deleteZone').addEventListener('click', deleteCurrentZone);
+  
+    loadUserData();
+});
+
+
+
+function loadUserData() {
+    fetch('/api/me.php')
+        .then(r => {
+            if (r.ok) return r.json();
+            throw new Error('Не авторизован');
+        })
+        .then(user => {
+            window.userData = user;
+        })
+        .catch(err => {
+            console.log('Пользователь не авторизован:', err);
+        });
+}
+
+
+async function apiCall(url, options = {}) {
+    try {
+        const response = await fetch(url, options);
+        
+        if (!response.ok) {
+            let errorText = await response.text();
+            try {
+                const errorJson = JSON.parse(errorText);
+                throw new Error(errorJson.error || `HTTP error ${response.status}`);
+            } catch {
+                throw new Error(errorText || `HTTP error ${response.status}`);
+            }
+        }
+        
+        return await response.json();
+    } catch (error) {
+        console.error('API Error:', error);
+        throw error;
+    }
+}
+
+
+async function loadMyZones() {
+    try {
+        const response = await fetch('/api/my_zones.php');
+        
+        if (!response.ok) {
+            console.log('Используем тестовые данные');
+            myZones = getTestZones();
+            renderZonesList('myZonesList', myZones, true);
+            return;
+        }
+        
+        myZones = await response.json();
+        renderZonesList('myZonesList', myZones, true);
+    } catch (error) {
+        console.error('Ошибка загрузки, используем тестовые данные:', error);
+        myZones = getTestZones();
+        renderZonesList('myZonesList', myZones, true);
+    }
+}
+
+
+
+function getTestZones() {
+    return [
+        {
+            id: 1,
+            description: 'Ремонт дороги у подъезда 1',
+            confirm_count: 3,
+            created_at: '2024-01-15T10:00:00',
+            last_confirmed_at: '2024-01-20T08:30:00',
+            creator_id: 1,
+            color: '#E53935',
+            geometry: '{"type":"Polygon","coordinates":[[[37.6173,55.7558],[37.6175,55.7559],[37.6176,55.7557],[37.6174,55.7556],[37.6173,55.7558]]]}'
+        },
+        {
+            id: 2,
+            description: 'Ремонт детской площадки',
+            confirm_count: 0,
+            created_at: '2024-01-20T14:30:00',
+            last_confirmed_at: null,
+            creator_id: 2,
+            color: '#9E9E9E',
+            geometry: '{"type":"Polygon","coordinates":[[[37.6180,55.7560],[37.6182,55.7561],[37.6183,55.7559],[37.6181,55.7558],[37.6180,55.7560]]]}'
+        }
+    ];
+}
+
+
+
+async function loadZonesInMyYard() {
+    try {
+        const zones = await apiCall('/api/zones_in_my_yard.php');
+        yardZones = zones;
+        renderZonesList('yardZonesList', yardZones, false);
+    } catch (error) {
+        console.error('Ошибка загрузки зон в дворе:', error);
+        const errorMessage = error.message.includes('Требуется авторизация') 
+            ? 'Требуется авторизация. Пожалуйста, войдите в систему.'
+            : 'Ошибка загрузки зон: ' + error.message;
+        
+        document.getElementById('yardZonesList').innerHTML = 
+            `<div class="empty-message">${errorMessage}</div>`;
+    }
+}
+function renderZonesList(containerId, zones, isMyZones) {
+    const container = document.getElementById(containerId);
+    
+    if (!zones || zones.length === 0) {
+        container.innerHTML = '<div class="empty-message">Зоны не найдены</div>';
+        return;
+    }
+    
+    let html = '';
+    zones.forEach(zone => {
+        const currentUserId = getCurrentUserId();
+        const isCreator = zone.creator_id == currentUserId;
+        const statusClass = getZoneStatusClass(zone);
+        const statusText = getZoneStatusText(zone);
+        const createdDate = new Date(zone.created_at).toLocaleDateString('ru-RU');
+        const lastConfirmed = zone.last_confirmed_at ? 
+            new Date(zone.last_confirmed_at).toLocaleDateString('ru-RU') : '—';
+        
+        html += `
+            <div class="zone-item ${statusClass}">
+                <div class="zone-header">
+                    <div class="zone-title">Зона #${zone.id}</div>
+                    <span class="zone-status ${statusClass}">${statusText}</span>
+                </div>
+                <div class="zone-description">${zone.description || 'Без описания'}</div>
+                <div class="zone-meta">
+                    <span>Создана: ${createdDate}</span>
+                    <span>Подтверждений: ${zone.confirm_count || 0}</span>
+                    <span>Последнее: ${lastConfirmed}</span>
+                </div>
+                <div class="zone-actions">
+                    <button class="zone-action-btn view" onclick="viewZoneOnMap(${zone.id})">
+                        👁 Показать на карте
+                    </button>
+                    ${isCreator ? `
+                        <button class="zone-action-btn edit" onclick="editZone(${zone.id})">
+                            ✏️ Редактировать
+                        </button>
+                        <button class="zone-action-btn delete" onclick="confirmDeleteZone(${zone.id})">
+                            🗑️ Удалить
+                        </button>
+                    ` : ''}
+                </div>
+            </div>
+        `;
+    });
+    
+    container.innerHTML = html;
+}
+
+
+
+function getCurrentUserId() {
+    if (window.userData && window.userData.id) {
+        return window.userData.id;
+    }
+    const userDataStr = localStorage.getItem('userData') || sessionStorage.getItem('userData');
+    if (userDataStr) {
+        try {
+            const userData = JSON.parse(userDataStr);
+            return userData.id;
+        } catch (e) {
+            console.error('Error parsing user data:', e);
+        }
+    }
+    return 0;
+}
+
+function getZoneStatusClass(zone) {
+    if (zone.confirm_count === 0) return 'pending';
+    if (zone.color === '#E53935') return 'active-red';
+    if (zone.color === '#FBC02D') return 'active-yellow';
+    if (zone.color === '#43A047') return 'expired-green';
+    return 'pending';
+}
+function getZoneStatusText(zone) {
+    if (zone.confirm_count === 0) return 'Ожидает подтверждения';
+    if (zone.color === '#E53935') return 'Активная';
+    if (zone.color === '#FBC02D') return 'Активная';
+    if (zone.color === '#43A047') return 'Просроченная';
+    return 'Неизвестно';
+}
+function viewZoneOnMap(zoneId) {
+    document.querySelectorAll('.zones-modal').forEach(modal => {
+        modal.style.display = 'none';
+    });
+    window.open(`/index.html?zone=${zoneId}`, '_blank');
+}
+
+
+
+function editZone(zoneId) {
+    if (!window.userData || !window.userData.id) {
+        showToast('Для редактирования зон необходимо авторизоваться', true);
+        return;
+    }
+    
+    editingZoneId = zoneId;
+    
+    const zone = [...myZones].find(z => z.id == zoneId);
+    
+    if (!zone) {
+        showToast('Зона не найдена в вашем списке', true);
+        return;
+    }
+    if (zone.creator_id != window.userData.id) {
+        showToast('Вы не являетесь создателем этой зоны', true);
+        return;
+    }
+    if (zone.is_active === false) {
+        showToast('Эта зона была удалена и не может быть отредактирована', true);
+        return;
+    }
+    
+    console.log('Редактируем зону:', zone);
+    console.log('ID текущего пользователя:', window.userData.id);
+    console.log('ID создателя зоны:', zone.creator_id);
+    document.getElementById('editZoneDescription').value = zone.description || '';
+    document.getElementById('editZoneModal').style.display = 'block';
+    initEditZoneMap(zone);
+}
+
+
+
+function initEditZoneMap(zone) {
+    if (!window.ymaps) {
+        showToast('Карта не загружена. Пожалуйста, обновите страницу.', true);
+        return;
+    }
+    
+    ymaps.ready(() => {
+        if (!editZoneMap) {
+            editZoneMap = new ymaps.Map('editMap', {
+                center: [55.7558, 37.6173],
+                zoom: 15,
+                controls: ['zoomControl', 'typeSelector']
+            });
+        }
+        editZoneMap.geoObjects.removeAll();
+        if (zone.geometry) {
+            try {
+                const geo = JSON.parse(zone.geometry);
+                console.log('Загружаемая геометрия:', geo);
+                const coords = geo.coordinates[0].map(coord => [coord[1], coord[0]]);
+                
+                console.log('Координаты для Яндекс.Карт:', coords);
+                
+                editZonePolygon = new ymaps.Polygon(
+                    [coords],
+                    {
+                        hintContent: 'Редактируемая зона',
+                        balloonContent: zone.description || 'Без описания'
+                    },
+                    {
+                        fillColor: (zone.color || '#FF9800') + '88',
+                        strokeColor: zone.color || '#FF9800',
+                        strokeWidth: 3,
+                        fillOpacity: 0.6,
+                        editorDrawingCursor: "crosshair",
+                        editorMaxPoints: Infinity,
+                        draggable: false
+                    }
+                );
+                
+                editZoneMap.geoObjects.add(editZonePolygon);
+                editZoneMap.setBounds(editZonePolygon.geometry.getBounds(), {
+                    checkZoomRange: true,
+                    zoomMargin: 30
+                });
+                setTimeout(() => {
+                    if (editZonePolygon && editZonePolygon.editor) {
+                        editZonePolygon.editor.startEditing();
+                        console.log('Редактор полигона активирован');
+                    }
+                }, 500);
+                
+            } catch (e) {
+                console.error('Ошибка парсинга геометрии:', e, zone.geometry);
+                showToast('Ошибка загрузки геометрии зоны. Пожалуйста, попробуйте другую зону.', true);
+            }
+        } else {
+            showToast('У зоны нет геометрии для редактирования', true);
+        }
+    });
+}
+
+
+
+async function saveZoneChanges() {
+    if (!window.userData || !window.userData.id) {
+        showToast('Для сохранения изменений необходимо авторизоваться', true);
+        return;
+    }
+    
+    if (!editingZoneId || !editZonePolygon) {
+        showToast('Нет данных для сохранения', true);
+        return;
+    }
+    
+    const description = document.getElementById('editZoneDescription').value.trim();
+    if (!description) {
+        showToast('Введите описание зоны', true);
+        return;
+    }
+    
+    try {
+        showToast('Сохранение зоны...');
+        const rawCoords = editZonePolygon.geometry.getCoordinates()[0];
+        const fixedCoords = rawCoords.map(coord => [coord[1], coord[0]]);
+        if (fixedCoords.length > 0) {
+            const first = fixedCoords[0];
+            const last = fixedCoords[fixedCoords.length - 1];
+            if (first[0] !== last[0] || first[1] !== last[1]) {
+                fixedCoords.push([...first]);
+            }
+        }
+        
+        const geometry = {
+            type: "Polygon",
+            coordinates: [fixedCoords]
+        };
+        
+        console.log('Отправляемые данные:', {
+            description: description,
+            geometry: geometry,
+            userId: window.userData.id,
+            zoneId: editingZoneId
+        });
+        const response = await fetch(`/api/repair_zones.php?id=${editingZoneId}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                description: description,
+                geometry: geometry
+            })
+        });
+        
+        console.log('Статус ответа:', response.status);
+        
+        const responseText = await response.text();
+        console.log('Текст ответа:', responseText);
+        
+        try {
+            const result = JSON.parse(responseText);
+            
+            if (response.ok && result.status === 'ok') {
+                showToast('Зона успешно обновлена!');
+                document.getElementById('editZoneModal').style.display = 'none';
+                loadMyZones();
+                loadZonesInMyYard();
+                if (editZonePolygon && editZonePolygon.editor) {
+                    editZonePolygon.editor.stopEditing();
+                }
+                
+            } else {
+                showToast(result.error || 'Ошибка обновления зоны', true);
+            }
+        } catch (e) {
+            console.error('Не удалось разобрать JSON:', responseText);
+            showToast('Ошибка сервера: ' + responseText.substring(0, 100), true);
+        }
+        
+    } catch (error) {
+        console.error('Ошибка сохранения зоны:', error);
+        showToast('Ошибка сохранения зоны: ' + error.message, true);
+    }
+}
+
+
+function confirmDeleteZone(zoneId) {
+    if (confirm('Вы уверены, что хотите удалить эту зону?')) {
+        deleteZone(zoneId);
+    }
+}
+function deleteCurrentZone() {
+    if (!editingZoneId) return;
+    
+    if (confirm('Вы уверены, что хотите удалить эту зону?')) {
+        deleteZone(editingZoneId);
+    }
+}
+async function deleteZone(zoneId) {
+    try {
+        const response = await fetch(`/api/repair_zones.php?id=${zoneId}`, {
+            method: 'DELETE'
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok && result.status === 'ok') {
+            showToast('Зона успешно удалена');
+            document.getElementById('editZoneModal').style.display = 'none';
+            loadMyZones();
+            loadZonesInMyYard();
+            
+        } else {
+            showToast(result.error || 'Ошибка удаления зоны', true);
+        }
+        
+    } catch (error) {
+        console.error('Ошибка удаления зоны:', error);
+        showToast('Ошибка удаления зоны', true);
+    }
+}
+</script>
 </body>
 </html>
