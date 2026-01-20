@@ -1,4 +1,5 @@
 <?php
+header('Content-Type: application/json; charset=utf-8');
 require __DIR__ . '/admin_guard.php';
 require __DIR__ . '/../db.php';
 

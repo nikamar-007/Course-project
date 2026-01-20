@@ -260,10 +260,29 @@ fetch('header-admin.html')
     <button class="filter-btn" onclick="filterUsers('user')">Пользователи</button>
     <button class="filter-btn" onclick="filterUsers('no-yard')">Без двора</button>
     <button class="filter-btn" onclick="filterUsers('today')">Сегодня</button>
+    <button class="filter-btn" onclick="showActivityView()">
+      📊 Пользовательская активность
+    </button>
+
+    <input id="activityEmailFilter" class="filter-btn" style="border-radius:10px; min-width:220px; display:none;"
+       placeholder="Поиск по email..." oninput="applyActivityFilters()" />
+
+    <input id="activityFrom" type="date" class="filter-btn" style="border-radius:10px; display:none;"
+          onchange="applyActivityFilters()" />
+
+    <input id="activityTo" type="date" class="filter-btn" style="border-radius:10px; display:none;"
+          onchange="applyActivityFilters()" />
+
+    <button id="activityBackBtn" class="filter-btn" style="display:none;" onclick="showUsersView()">
+      ← Назад к пользователям
+    </button>
+
+
+
   </div>
   <div class="admin-table-wrapper">
     <table class="admin-table">
-      <thead>
+      <thead id="usersThead">
         <tr>
           <th>ID</th>
           <th>Пользователь</th>
@@ -284,7 +303,141 @@ fetch('header-admin.html')
 </div>
 
 <script>
+  let viewMode = 'users'; 
+
+const USERS_THEAD_HTML = `
+  <tr>
+    <th>ID</th>
+    <th>Пользователь</th>
+    <th>Email</th>
+    <th>Адрес</th>
+    <th>Двор</th>
+    <th>Роль</th>
+    <th>Регистрация</th>
+  </tr>
+`;
+
+const ACTIVITY_THEAD_HTML = `
+  <tr>
+    <th>Email</th>
+    <th>Создано зон</th>
+    <th>Подтверждено зон</th>
+    <th>Итого</th>
+  </tr>
+`;
+
+
+function setThead(html) {
+  document.getElementById('usersThead').innerHTML = html;
+}
+
+function renderActivity(rows) {
+  const tbody = document.getElementById('users');
+
+  if (!rows || rows.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="4" class="empty-state">Нет данных</td>
+      </tr>
+    `;
+    return;
+  }
+
+  tbody.innerHTML = rows.map(r => {
+    const created = Number(r.created_count) || 0;
+    const confirmed = Number(r.confirmed_count) || 0;
+    const total = created + confirmed;
+
+    return `
+      <tr>
+        <td>
+          <a href="mailto:${r.email}" style="color:#E53935;">
+            ${r.email}
+          </a>
+        </td>
+        <td>${created}</td>
+        <td>${confirmed}</td>
+        <td><strong>${total}</strong></td>
+      </tr>
+    `;
+  }).join('');
+}
+
+
+
+function loadUsersActivity(queryString = '') {
+  return fetch('/api/admin/users_activity.php' + queryString)
+    .then(async r => {
+      if (!r.ok) throw new Error('Ошибка загрузки активности: ' + r.status);
+
+      const text = await r.text();
+      try {
+        return JSON.parse(text);
+      } catch (e) {
+        throw new Error('Сервер вернул не JSON: ' + text.slice(0, 200));
+      }
+    });
+}
+
+
+function applyActivityFilters() {
+  const q = (document.getElementById('activityEmailFilter').value || '').trim().toLowerCase();
+
+  activityFiltered = activityRows.filter(r => {
+    if (!q) return true;
+    return String(r.email || '').toLowerCase().includes(q);
+  });
+
+  renderActivity(activityFiltered);
+}
+
+
+function showUsersView() {
+  viewMode = 'users';
+  setThead(USERS_THEAD_HTML);
+  document.getElementById('activityEmailFilter').style.display = 'none';
+  document.getElementById('activityFrom').style.display = 'none';
+  document.getElementById('activityTo').style.display = 'none';
+  document.getElementById('activityBackBtn').style.display = 'none';
+
+  filterUsers(currentFilter);
+}
+
+
+function showActivityView() {
+  viewMode = 'activity';
+  setThead(ACTIVITY_THEAD_HTML);
+  document.getElementById('activityEmailFilter').style.display = 'inline-block';
+  document.getElementById('activityBackBtn').style.display = 'inline-block';
+  document.getElementById('activityFrom').style.display = 'none';
+  document.getElementById('activityTo').style.display = 'none';
+
+  const tbody = document.getElementById('users');
+  tbody.innerHTML = `
+    <tr><td colspan="4" class="loading">Загрузка активности...</td></tr>
+  `;
+
+  loadUsersActivity()
+    .then(rows => {
+      activityRows = rows;
+      applyActivityFilters();
+    })
+    .catch(err => {
+      console.error(err);
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="4" style="text-align:center; color:#C53030; padding:40px;">
+            ❌ Ошибка загрузки активности<br>
+            <small>${String(err.message || err)}</small>
+          </td>
+        </tr>
+      `;
+    });
+}
+
 let allUsers = [];
+let activityRows = [];
+let activityFiltered = [];
 let currentFilter = 'all';
 
 function initAdminHeader(activeAdminPage) {
@@ -343,34 +496,21 @@ function getGreeting() {
   return 'Доброй ночи';
 }
 
-function loadUsersStats() {
-  fetch('/api/admin/users_stats.php')
-    .then(r => {
-      if (!r.ok) throw new Error('Ошибка загрузки статистики');
-      return r.json();
-    })
-    .then(stats => {
-      document.getElementById('totalUsers').textContent = stats.total_users || 0;
-      document.getElementById('adminUsers').textContent = stats.admin_users || 0;
-      document.getElementById('regularUsers').textContent = stats.regular_users || 0;
-      document.getElementById('usersWithoutYard').textContent = stats.users_without_yard || 0;
-      document.getElementById('usersToday').textContent = stats.users_today || 0;
-      document.getElementById('usersWithNickname').textContent = stats.users_with_nickname || 0;
-    })
-    .catch(err => {
-      console.error('Ошибка загрузки статистики пользователей:', err);
-    });
-}
-
 function loadUsers() {
-  fetch('/api/admin/users.php')
-    .then(r => {
-      if (!r.ok) throw new Error('Ошибка загрузки');
-      return r.json();
+  return fetch('/api/admin/users.php')
+    .then(async r => {
+      if (!r.ok) throw new Error('Ошибка загрузки: ' + r.status);
+      const text = await r.text();
+      try {
+        return JSON.parse(text);
+      } catch (e) {
+        throw new Error('Сервер вернул не JSON: ' + text.slice(0, 200));
+      }
     })
     .then(users => {
       allUsers = users;
       renderUsers(users);
+      return users;
     })
     .catch(err => {
       console.error('Ошибка загрузки пользователей:', err);
@@ -378,12 +518,16 @@ function loadUsers() {
       tbody.innerHTML = `
         <tr>
           <td colspan="8" style="text-align: center; color: #C53030; padding: 40px;">
-            ❌ Ошибка загрузки данных
+            ❌ Ошибка загрузки данных<br>
+            <small>${String(err.message || err)}</small>
           </td>
         </tr>
       `;
+      throw err;
     });
 }
+
+
 
 function renderUsers(users) {
   const tbody = document.getElementById('users');
@@ -443,6 +587,11 @@ function renderUsers(users) {
 }
 
 function filterUsers(filterType) {
+  if (viewMode !== 'users') {
+    setThead(USERS_THEAD_HTML);
+    viewMode = 'users';
+  }
+
   currentFilter = filterType;
   
   document.querySelectorAll('.filter-btn').forEach(btn => {
@@ -485,16 +634,37 @@ function filterUsers(filterType) {
   renderUsers(filteredUsers);
 }
 
+function loadUsersStats() {
+  fetch('/api/admin/users_stats.php')
+    .then(r => {
+      if (!r.ok) throw new Error('Ошибка загрузки статистики');
+      return r.json();
+    })
+    .then(stats => {
+      document.getElementById('totalUsers').textContent = stats.total_users || 0;
+      document.getElementById('adminUsers').textContent = stats.admin_users || 0;
+      document.getElementById('regularUsers').textContent = stats.regular_users || 0;
+      document.getElementById('usersWithoutYard').textContent = stats.users_without_yard || 0;
+      document.getElementById('usersToday').textContent = stats.users_today || 0;
+      document.getElementById('usersWithNickname').textContent = stats.users_with_nickname || 0;
+    })
+    .catch(err => console.error('Ошибка loadUsersStats:', err));
+}
+
 document.addEventListener('DOMContentLoaded', function() {
   loadUsersStats();
   loadUsers();
   
   setInterval(function() {
     loadUsersStats();
-    loadUsers().then(() => {
-      filterUsers(currentFilter);
-    });
+
+    if (viewMode === 'users') {
+      loadUsers().then(() => filterUsers(currentFilter));
+    } else {
+      showActivityView();
+    }
   }, 60000);
+
 });
 
 document.addEventListener('DOMContentLoaded', function() {
