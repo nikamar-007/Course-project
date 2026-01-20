@@ -300,6 +300,8 @@ let manualPlacemarks = [];
 let manualRoutePolyline = null;
 let manualRouteYandexRouter = null;
 let zonePolygonsById = {};
+let dangerRouteSegments = [];
+
 ymaps.ready(init);
 
 function init() {
@@ -468,6 +470,11 @@ async function buildSimpleRoute() {
     console.log('Проверка пересечения с ремонтными зонами...');
     const checkResult = await checkRouteIntersects(routeGeoJSON);
     console.log('Результат проверки:', checkResult);
+    if (checkResult.intersects) {
+      highlightRouteInRepairZones(routeGeoJSON);
+    } else {
+      clearDangerSegments();
+    }
 
     if (checkResult.intersects) {
       showRouteWarning(checkResult);
@@ -752,6 +759,11 @@ async function buildManualRouteYandex() {
 
     const routeGeoJSON = extractRouteGeoJSON(route);
     const checkResult = await checkRouteIntersects(routeGeoJSON);
+    if (checkResult.intersects) {
+      highlightRouteInRepairZones(routeGeoJSON);
+    } else {
+      clearDangerSegments();
+    }
 
     if (checkResult.intersects) {
       showManualRouteWarning(checkResult);
@@ -843,6 +855,7 @@ function clearManualRoute() {
   document.getElementById('manualRouteStats').style.display = 'none';
   document.getElementById('manualRouteWarning').style.display = 'none';
   updateStatus('Ручной маршрут очищен');
+  clearDangerSegments();
 }
 
 async function checkRouteIntersects(routeGeoJSON) {
@@ -922,6 +935,7 @@ function clearRouteVisuals() {
   
   document.getElementById('routeStats').style.display = 'none';
   document.getElementById('routeWarning').style.display = 'none';
+  clearDangerSegments();
 }
 
 function clearAll() {
@@ -1298,6 +1312,67 @@ function confirmZone(zoneId) {
     console.error('Ошибка подтверждения зоны:', error);
     showToast(error.message, true);
   });
+}
+
+function clearDangerSegments() {
+  dangerRouteSegments.forEach(seg => {
+    if (seg && map.geoObjects.indexOf(seg) !== -1) {
+      map.geoObjects.remove(seg);
+    }
+  });
+  dangerRouteSegments = [];
+}
+
+function segmentIntersectsPolygon(segment, polygon) {
+  const p1 = segment[0]; 
+  const p2 = segment[1];
+  const SAMPLES = 12;
+  const placemarks = [];
+  for (let i = 0; i <= SAMPLES; i++) {
+    const t = i / SAMPLES;
+    const lat = p1[0] + (p2[0] - p1[0]) * t;
+    const lng = p1[1] + (p2[1] - p1[1]) * t;
+    placemarks.push(new ymaps.Placemark([lat, lng]));
+  }
+  const q = ymaps.geoQuery(placemarks);
+  return q.searchInside(polygon).getLength() > 0;
+}
+
+
+function highlightRouteInRepairZones(routeGeoJSON) {
+  clearDangerSegments();
+
+  const coords = routeGeoJSON.coordinates;
+  if (!coords || coords.length < 2) return;
+
+  for (let i = 0; i < coords.length - 1; i++) {
+    const segment = [
+      [coords[i][1], coords[i][0]],
+      [coords[i + 1][1], coords[i + 1][0]]
+    ];
+
+    for (const zoneId in zonePolygonsById) {
+      const polygon = zonePolygonsById[zoneId];
+      if (!polygon) continue;
+
+      if (segmentIntersectsPolygon(segment, polygon)) {
+        const dangerLine = new ymaps.Polyline(
+          segment,
+          {},
+          {
+            strokeColor: '#E53935', 
+            strokeWidth: 7,
+            strokeOpacity: 0.9,
+            zIndex: 9999
+          }
+        );
+
+        map.geoObjects.add(dangerLine);
+        dangerRouteSegments.push(dangerLine);
+        break;
+      }
+    }
+  }
 }
 
 function initAddressSuggestions() {
