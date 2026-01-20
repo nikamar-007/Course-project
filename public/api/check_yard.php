@@ -22,7 +22,6 @@ if ($lat === null || $lng === null || !is_numeric($lat) || !is_numeric($lng)) {
   exit;
 }
 
-// В Яндекс.Картах coords = [lat, lon], в БД point делаем (lon, lat)
 try {
   $stmt = $pdo->prepare("
     SELECT id
