@@ -14,7 +14,7 @@ if ($method === 'GET') {
         exit;
     }
 
-    $id = $_GET['id'];
+    $id = (int)$_GET['id'];
     $userId = $_SESSION['user_id'] ?? null;
     $userRole = $_SESSION['user_role'] ?? null;
 
@@ -23,8 +23,6 @@ if ($method === 'GET') {
             SELECT 
                 f.id,
                 f.user_id,
-                f.name,
-                f.email,
                 f.type,
                 f.message,
                 f.admin_reply,
@@ -32,8 +30,8 @@ if ($method === 'GET') {
                 f.replied_at
             FROM feedback f
             WHERE f.id = :id
+            LIMIT 1
         ");
-        
         $stmt->execute(['id' => $id]);
         $feedback = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -43,68 +41,44 @@ if ($method === 'GET') {
             exit;
         }
 
+        // доступ: админ или автор обращения
         $hasAccess = false;
-
         if ($userRole === 'admin') {
             $hasAccess = true;
-        }
-        else if ($userId && $feedback['user_id'] == $userId) {
+        } elseif ($userId && (int)$feedback['user_id'] === (int)$userId) {
             $hasAccess = true;
-        }
-        else if (!$userId) {
-            $guestEmail = $_SESSION['guest_feedback_email'] ?? null;
-            if ($guestEmail && $feedback['email'] == $guestEmail) {
-                $hasAccess = true;
-            }
-            else {
-                $guestFeedbacks = $_SESSION['guest_feedbacks'] ?? [];
-                if (in_array($id, $guestFeedbacks)) {
-                    $hasAccess = true;
-                }
-            }
         }
 
         if (!$hasAccess) {
             http_response_code(403);
-            echo json_encode(['error' => 'Доступ запрещен. Возможно, вы не автор этого обращения.']);
+            echo json_encode(['error' => 'Доступ запрещён']);
             exit;
         }
+        $stmt = $pdo->prepare("
+            SELECT id, file_path
+            FROM feedback_files
+            WHERE feedback_id = :id
+            ORDER BY id ASC
+        ");
+        $stmt->execute(['id' => $id]);
+        $files = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        $files = [];
         $fileUrls = [];
-        
-        try {
-            $stmt = $pdo->prepare("
-                SELECT id, file_path 
-                FROM feedback_files 
-                WHERE feedback_id = :id
-            ");
-            
-            if ($stmt) {
-                $stmt->execute(['id' => $id]);
-                $files = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-                foreach ($files as $file) {
-                    if (!empty($file['file_path'])) {
-                        $fileUrl = $file['file_path'];
-                        
-                        if (strpos($fileUrl, '/') !== 0 && strpos($fileUrl, 'http') !== 0) {
-                            $fileUrl = '/uploads/feedback/' . $fileUrl;
-                        }
-                        
-                        $fileUrls[] = [
-                            'id' => $file['id'],
-                            'name' => basename($file['file_path']),
-                            'url' => $fileUrl
-                        ];
-                    }
+        foreach ($files as $file) {
+            if (!empty($file['file_path'])) {
+                $fileUrl = $file['file_path'];
+                if (strpos($fileUrl, '/') !== 0 && strpos($fileUrl, 'http') !== 0) {
+                    $fileUrl = '/uploads/feedback/' . $fileUrl;
                 }
+                $fileUrls[] = [
+                    'id' => $file['id'],
+                    'name' => basename($file['file_path']),
+                    'url' => $fileUrl
+                ];
             }
-        } catch (Exception $e) {
-            error_log('Ошибка при получении файлов: ' . $e->getMessage());
         }
 
-        $response = [
+        echo json_encode([
             'success' => true,
             'id' => $feedback['id'],
             'type' => $feedback['type'] ?? 'unknown',
@@ -113,93 +87,66 @@ if ($method === 'GET') {
             'created_at' => $feedback['created_at'] ?? date('Y-m-d H:i:s'),
             'replied_at' => $feedback['replied_at'] ?? null,
             'files' => $fileUrls
-        ];
-
-        echo json_encode($response);
-        
-    } catch (Exception $e) {
-        http_response_code(500);
-        echo json_encode([
-            'error' => 'Ошибка сервера',
-            'message' => $e->getMessage()
         ]);
-        
+        exit;
+
+    } catch (Throwable $e) {
+        http_response_code(500);
+        echo json_encode(['error' => 'Ошибка сервера', 'message' => $e->getMessage()]);
         error_log('Feedback API GET Error: ' . $e->getMessage());
+        exit;
     }
-    
-} elseif ($method === 'POST') {
-    
+}
+
+if ($method === 'POST') {
     try {
         $userId = $_SESSION['user_id'] ?? null;
-        $userEmail = $_SESSION['user_email'] ?? null;
-        
-        if ($userId) {
-            $name = $_POST['name'] ?? '';
-            $email = $userEmail; 
-            $type = $_POST['type'] ?? 'other';
-            $message = $_POST['message'] ?? '';
-        } else {
-            $name = $_POST['name'] ?? '';
-            $email = $_POST['email'] ?? '';
-            $type = $_POST['type'] ?? 'other';
-            $message = $_POST['message'] ?? '';
+        if (!$userId) {
+            http_response_code(401);
+            echo json_encode(['error' => 'Требуется авторизация']);
+            exit;
         }
-        
-        if (empty($message)) {
+        $type = $_POST['type'] ?? 'other';
+        $message = $_POST['message'] ?? '';
+
+        if (trim($message) === '') {
             http_response_code(400);
             echo json_encode(['error' => 'Сообщение не может быть пустым']);
             exit;
         }
-        
-        if (!$userId && empty($email)) {
-            http_response_code(400);
-            echo json_encode(['error' => 'Для гостей email обязателен']);
-            exit;
-        }
-        
         $stmt = $pdo->prepare("
-            INSERT INTO feedback (user_id, name, email, type, message, created_at)
-            VALUES (:user_id, :name, :email, :type, :message, NOW())
+            INSERT INTO feedback (user_id, type, message, created_at)
+            VALUES (:user_id, :type, :message, NOW())
         ");
-        
         $stmt->execute([
             'user_id' => $userId,
-            'name' => $name,
-            'email' => $email,
             'type' => $type,
             'message' => $message
         ]);
-        
         $feedbackId = $pdo->lastInsertId();
-        
         $uploadedFiles = [];
         if (!empty($_FILES['files'])) {
             $uploadDir = __DIR__ . '/../uploads/feedback/';
             if (!file_exists($uploadDir)) {
                 mkdir($uploadDir, 0777, true);
             }
-            
             $filesCount = count($_FILES['files']['name']);
             for ($i = 0; $i < $filesCount; $i++) {
                 if ($_FILES['files']['error'][$i] === UPLOAD_ERR_OK) {
                     $tmpName = $_FILES['files']['tmp_name'][$i];
                     $originalName = $_FILES['files']['name'][$i];
-                    
                     $fileExtension = pathinfo($originalName, PATHINFO_EXTENSION);
                     $uniqueName = uniqid() . '_' . time() . '.' . $fileExtension;
                     $uploadPath = $uploadDir . $uniqueName;
-                    
                     if (move_uploaded_file($tmpName, $uploadPath)) {
                         $stmt = $pdo->prepare("
                             INSERT INTO feedback_files (feedback_id, file_path)
                             VALUES (:feedback_id, :file_path)
                         ");
-                        
                         $stmt->execute([
                             'feedback_id' => $feedbackId,
                             'file_path' => $uniqueName
                         ]);
-                        
                         $uploadedFiles[] = [
                             'original_name' => $originalName,
                             'saved_name' => $uniqueName,
@@ -216,18 +163,14 @@ if ($method === 'GET') {
             'message' => 'Обращение успешно отправлено',
             'files' => $uploadedFiles
         ]);
-        
-    } catch (Exception $e) {
+        exit;
+
+    } catch (Throwable $e) {
         http_response_code(500);
-        echo json_encode([
-            'error' => 'Ошибка при сохранении обращения',
-            'message' => $e->getMessage()
-        ]);
-        
+        echo json_encode(['error' => 'Ошибка при сохранении обращения', 'message' => $e->getMessage()]);
         error_log('Feedback API POST Error: ' . $e->getMessage());
+        exit;
     }
-    
-} else {
-    http_response_code(405);
-    echo json_encode(['error' => 'Метод не поддерживается']);
 }
+http_response_code(405);
+echo json_encode(['error' => 'Метод не поддерживается']);
