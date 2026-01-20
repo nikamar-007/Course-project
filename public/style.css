@@ -25,6 +25,7 @@ body {
   background: var(--bg-primary);
   color: var(--text-primary);
   min-height: 100vh;
+  overflow: hidden;
 }
 .neumorphic {
   background: var(--bg-primary);
@@ -64,6 +65,9 @@ body {
   z-index: 1; 
 }
 .panel {
+  max-height: calc(100vh - 140px); 
+  overflow-y: auto;                
+  overflow-x: hidden;
   position: absolute;
   top: 80px;
   left: 20px;
@@ -2868,4 +2872,8 @@ body.profile-card-hover #map {
     .zone-action-btn {
         width: 100%;
     }
+}
+
+html {
+  overflow: hidden;
 }
