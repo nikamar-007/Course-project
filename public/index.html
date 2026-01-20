@@ -301,6 +301,10 @@ let manualRoutePolyline = null;
 let manualRouteYandexRouter = null;
 let zonePolygonsById = {};
 let dangerRouteSegments = [];
+let zoneDataById = {};
+let editingZoneId = null;
+let isEditingZone = false;
+let editingSnapshot = null; 
 
 ymaps.ready(init);
 
@@ -383,8 +387,16 @@ function init() {
   document.getElementById('btnFinishManualRoute').onclick = finishManualRouteAnyway;
   document.getElementById('myHomeBtn').onclick = showMyHome;
   document.getElementById('btnDrawZone').onclick = startDrawingZone;
-  document.getElementById('btnSaveZone').onclick = saveZone;
-  document.getElementById('btnCancelZone').onclick = cancelZone;
+  document.getElementById('btnSaveZone').onclick = () => {
+    if (isEditingZone) saveEditedZone();
+    else saveZone();
+  };
+
+  document.getElementById('btnCancelZone').onclick = () => {
+    if (isEditingZone) cancelEditZone();
+    else cancelZone();
+  };
+
 
   loadRepairZones();
   const openBtn = document.getElementById('openPanelBtn');
@@ -1079,7 +1091,8 @@ function showHomeByCoords(coords, address) {
 
 function loadRepairZones() {
   zonePolygonsById = {};
-  fetch('/api/repair_zones.php')
+  zoneDataById = {};
+  fetch('/api/repair_zones.php?ts=' + Date.now(), { cache: 'no-store' })
     .then(res => {
       if (!res.ok) {
         throw new Error('Network response was not ok');
@@ -1132,18 +1145,29 @@ function loadRepairZones() {
                     <div class="zone-info" style="margin-top:6px; color: #2196F3;">
                       ✨ Вы создатель этой зоны
                     </div>
+                    <div style="display:flex; gap:8px; margin-top:8px; flex-wrap: wrap;">
+                      <button onclick="startEditZone(${z.id})" class="btn-zone"
+                        style="background-color:#FFC107; color:#000;">
+                        ✏️ Редактировать
+                      </button>
+
+                      <button onclick="deleteZoneFromMap(${z.id})" class="btn-zone"
+                        style="background-color:#E53935;">
+                        🗑️ Удалить
+                      </button>
+
+                      <button onclick="cancelEditZone(true)" class="btn-zone"
+                        style="background-color:#9E9E9E;">
+                        ↩️ Отменить редактирование
+                      </button>
+                    </div>
                   ` : z.confirm_count === 0 ? `
-                    <button
-                      onclick="confirmZone(${z.id})"
-                      class="btn-zone"
+                    <button onclick="confirmZone(${z.id})" class="btn-zone"
                       style="margin-top:6px; background-color: #9E9E9E;">
                       Подтвердить ремонт
                     </button>
                   ` : `
-                    <button
-                      onclick="confirmZone(${z.id})"
-                      class="btn-zone"
-                      style="margin-top:6px;">
+                    <button onclick="confirmZone(${z.id})" class="btn-zone" style="margin-top:6px;">
                       Подтвердить ремонт
                     </button>
                   `}
@@ -1162,6 +1186,8 @@ function loadRepairZones() {
 
           map.geoObjects.add(polygon);
           zonePolygonsById[String(z.id)] = polygon;
+          zoneDataById[String(z.id)] = z;
+
 
         } catch (e) {
           console.error('Ошибка при обработке зоны:', z, e);
@@ -1278,6 +1304,155 @@ function cancelZone() {
   document.getElementById('zoneDescription').value = '';
   updateStatus('Рисование зоны отменено');
 }
+
+function startEditZone(zoneId) {
+  if (!isAuthenticated) {
+    showToast('Для редактирования необходимо авторизоваться', true);
+    return;
+  }
+
+  const id = String(zoneId);
+  const polygon = zonePolygonsById[id];
+  const zone = zoneDataById[id];
+
+  if (!polygon || !zone) {
+    showToast('Зона не найдена на карте', true);
+    return;
+  }
+  try { if (polygon.balloon) polygon.balloon.close(); } catch (e) {}
+  try { if (map && map.balloon) map.balloon.close(); } catch (e) {}
+
+
+  editingZoneId = zoneId;
+  isEditingZone = true;
+  currentPolygon = polygon;
+  document.getElementById('zoneForm').style.display = 'block';
+  document.getElementById('zoneDescription').value = zone.description || '';
+  if (isEditingZone && editingZoneId && editingZoneId != zoneId) {
+    cancelEditZone(true);
+  }
+  editingSnapshot = {
+    zoneId,
+    coords: JSON.parse(JSON.stringify(polygon.geometry.getCoordinates())),
+    description: zone.description || ''
+  };
+  const cancelBtn = document.getElementById('btnCancelZone');
+  if (cancelBtn) cancelBtn.style.display = 'none';
+  if (currentPolygon.editor) {
+    currentPolygon.editor.startEditing();
+  }
+
+  updateStatus('✏️ Редактирование зоны: измените вершины и/или описание, затем нажмите "Сохранить зону"');
+}
+
+async function saveEditedZone() {
+  if (!currentPolygon || !editingZoneId) return;
+
+  try {
+    if (currentPolygon.editor) currentPolygon.editor.stopEditing();
+
+    const rawCoords = currentPolygon.geometry.getCoordinates();
+    const fixedCoords = rawCoords.map(ring => ring.map(p => [p[1], p[0]]));
+
+    const description = document.getElementById('zoneDescription').value || 'Ремонт';
+
+    const response = await fetch(`/api/repair_zones.php?id=${editingZoneId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        description,
+        geometry: { type: 'Polygon', coordinates: fixedCoords }
+      })
+    });
+
+    const data = await response.json();
+    if (!response.ok || data.status !== 'ok') {
+      throw new Error(data.error || 'Ошибка обновления зоны');
+    }
+    isEditingZone = false;
+    editingZoneId = null;
+    currentPolygon = null;
+
+    document.getElementById('zoneForm').style.display = 'none';
+    document.getElementById('zoneDescription').value = '';
+
+    loadRepairZones();
+    showToast('✅ Зона обновлена');
+    updateStatus('Зона обновлена');
+  } catch (e) {
+    console.error(e);
+    showToast(e.message || 'Ошибка обновления зоны', true);
+    updateStatus('Ошибка обновления зоны');
+    cancelEditZone(true);
+  }
+}
+
+function cancelEditZone(autoRefresh = true) {
+  try {
+    if (editingSnapshot && currentPolygon && editingZoneId == editingSnapshot.zoneId) {
+      currentPolygon.geometry.setCoordinates(
+        JSON.parse(JSON.stringify(editingSnapshot.coords))
+      );
+      document.getElementById('zoneDescription').value = editingSnapshot.description || '';
+    }
+  } catch (e) {}
+  try {
+    if (currentPolygon && currentPolygon.editor) currentPolygon.editor.stopEditing();
+  } catch (e) {}
+  isEditingZone = false;
+  editingZoneId = null;
+  currentPolygon = null;
+  editingSnapshot = null;
+  document.getElementById('zoneForm').style.display = 'none';
+  document.getElementById('zoneDescription').value = '';
+  const cancelBtn = document.getElementById('btnCancelZone');
+  if (cancelBtn) cancelBtn.style.display = '';
+
+  updateStatus('Редактирование зоны отменено');
+  if (autoRefresh) loadRepairZones();
+}
+
+
+
+async function deleteZoneFromMap(zoneId) {
+  if (!isAuthenticated) {
+    showToast('Для удаления необходимо авторизоваться', true);
+    return;
+  }
+
+  if (!confirm('Удалить эту зону?')) return;
+  if (isEditingZone && editingZoneId == zoneId) {
+    cancelEditZone(false);
+  }
+
+  try {
+    const response = await fetch(`/api/repair_zones.php?id=${zoneId}`, { method: 'DELETE' });
+    const data = await response.json();
+
+    if (!response.ok || data.status !== 'ok') {
+      throw new Error(data.error || 'Ошибка удаления зоны');
+    }
+    const id = String(zoneId);
+    const polygon = zonePolygonsById[id];
+    if (polygon && map && map.geoObjects) {
+      map.geoObjects.remove(polygon);
+    }
+    delete zonePolygonsById[id];
+    delete zoneDataById[id];
+    try { 
+      if (polygon && polygon.balloon) polygon.balloon.close(); 
+    } catch(e){}
+    loadRepairZones();
+
+    showToast('🗑️ Зона удалена');
+    updateStatus('Зона удалена');
+  } catch (e) {
+    console.error(e);
+    showToast(e.message || 'Ошибка удаления зоны', true);
+  }
+}
+
+
 
 function confirmZone(zoneId) {
   if (!isAuthenticated) {
