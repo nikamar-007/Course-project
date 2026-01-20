@@ -221,10 +221,6 @@ function initHeader(activePage) {
         </button>
       </div>
     </div>
-    
-    <div id="elevationChart" style="display: none; margin-top: 20px;">
-      <canvas id="elevationCanvas" width="400" height="150"></canvas>
-    </div>
   </div>
   <div id="customRoutePanel" style="display: none;">
     <div class="instructions">
@@ -280,10 +276,6 @@ function initHeader(activePage) {
           ✅ Завершить несмотря на зоны
         </button>
       </div>
-    </div>
-    
-    <div id="manualElevationChart" style="display: none; margin-top: 20px;">
-      <canvas id="manualElevationCanvas" width="400" height="150"></canvas>
     </div>
   </div>
 
@@ -491,7 +483,6 @@ async function buildSimpleRoute() {
     } else {
       hideRouteWarning();
       updateStatus(`Безопасный маршрут построен! ${distance}, ${duration}`);
-      showElevationProfile(route, 'elevationCanvas', 'routeElevation');
     }
   });
 
@@ -499,105 +490,6 @@ async function buildSimpleRoute() {
     console.log('Ошибка построения маршрута');
     updateStatus('Ошибка построения маршрута');
   });
-}
-
-async function showElevationProfile(route, canvasId, elevationElementId) {
-  try {
-    const coords = [];
-    const paths = route.getPaths();
-    
-    paths.each((path) => {
-      const segments = path.getSegments();
-      segments.each((segment) => {
-        const segmentGeometry = segment.geometry;
-        if (segmentGeometry && segmentGeometry.getCoordinates) {
-          const segmentCoords = segmentGeometry.getCoordinates();
-          if (segmentCoords && Array.isArray(segmentCoords)) {
-            segmentCoords.forEach((coord) => {
-              coords.push(coord);
-            });
-          }
-        }
-      });
-    });
-    const elevationData = generateMockElevationData(coords.length);
-    
-    document.getElementById(canvasId === 'elevationCanvas' ? 'elevationChart' : 'manualElevationChart').style.display = 'block';
-    drawElevationChart(elevationData, canvasId);
-    const elevationDiff = calculateElevationDiff(elevationData);
-    document.getElementById(elevationElementId).textContent = `±${elevationDiff} м`;
-    
-  } catch (error) {
-    console.error('Ошибка построения графика высот:', error);
-  }
-}
-
-function generateMockElevationData(count) {
-  const data = [];
-  let current = 120;
-  
-  for (let i = 0; i < count; i++) {
-    current += (Math.random() - 0.5) * 10;
-    data.push(Math.max(100, Math.min(150, current)));
-  }
-  
-  return data;
-}
-
-function calculateElevationDiff(data) {
-  if (data.length === 0) return 0;
-  
-  let min = data[0];
-  let max = data[0];
-  
-  for (let i = 1; i < data.length; i++) {
-    if (data[i] < min) min = data[i];
-    if (data[i] > max) max = data[i];
-  }
-  
-  return Math.round(max - min);
-}
-
-function drawElevationChart(data, canvasId) {
-  const canvas = document.getElementById(canvasId);
-  if (!canvas) return;
-  
-  const ctx = canvas.getContext('2d');
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  const min = Math.min(...data);
-  const max = Math.max(...data);
-  const range = max - min || 1;
-  ctx.beginPath();
-  ctx.moveTo(20, canvas.height - 20);
-  ctx.lineTo(canvas.width - 20, canvas.height - 20);
-  ctx.strokeStyle = '#666';
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(20, 20);
-  ctx.lineTo(20, canvas.height - 20);
-  ctx.strokeStyle = '#666';
-  ctx.stroke();
-  ctx.beginPath();
-  const stepX = (canvas.width - 40) / (data.length - 1);
-  
-  for (let i = 0; i < data.length; i++) {
-    const x = 20 + i * stepX;
-    const y = canvas.height - 20 - ((data[i] - min) / range) * (canvas.height - 40);
-    
-    if (i === 0) {
-      ctx.moveTo(x, y);
-    } else {
-      ctx.lineTo(x, y);
-    }
-  }
-  
-  ctx.strokeStyle = '#1e88e5';
-  ctx.lineWidth = 2;
-  ctx.stroke();
-  ctx.fillStyle = '#666';
-  ctx.font = '10px Arial';
-  ctx.fillText(`${min} м`, 5, canvas.height - 15);
-  ctx.fillText(`${max} м`, 5, 25);
 }
 
 function showRouteWarning(checkResult) {
@@ -635,7 +527,6 @@ function continueAnyway() {
   updateStatus('Вы продолжили через ремонтные зоны. Будьте осторожны!');
   if (multiRouter) {
     const route = multiRouter.getRoutes().get(0);
-    showElevationProfile(route, 'elevationCanvas', 'routeElevation');
   }
 }
 function startManualRoute() {
@@ -652,21 +543,13 @@ function startManualRoute() {
   clearManualRoute();
   const startCoords = pointA.geometry.getCoordinates();
   const endCoords = pointB.geometry.getCoordinates();
- const startPlacemark = new ymaps.Placemark(startCoords, {
-  balloonContent: 'Начало маршрута'
-}, {
-  preset: 'islands#redCircleDotIcon',
-  draggable: true
-});
-const endPlacemark = new ymaps.Placemark(endCoords, {
-  balloonContent: 'Конец маршрута'
-}, {
-  preset: 'islands#yellowCircleDotIcon',
-  draggable: true
-});
-  
-  map.geoObjects.add(startPlacemark);
-  map.geoObjects.add(endPlacemark);
+  const startPlacemark = pointA;
+  const endPlacemark = pointB;
+  startPlacemark.options.set({ preset: 'islands#redCircleDotIcon', draggable: true });
+  startPlacemark.properties.set({ balloonContent: 'Начало маршрута' });
+
+  endPlacemark.options.set({ preset: 'islands#yellowCircleDotIcon', draggable: true });
+  endPlacemark.properties.set({ balloonContent: 'Конец маршрута' });
   manualPlacemarks.push(startPlacemark, endPlacemark);
   reverseGeocode(startCoords, (startAddress) => {
     reverseGeocode(endCoords, (endAddress) => {
@@ -712,7 +595,7 @@ function handleManualPointClick(e) {
     const placemark = new ymaps.Placemark(coords, {
       balloonContent: `Промежуточная точка: ${address}`
     }, {
-      preset: 'islands#blueCircleDotIcon',
+      preset: 'islands#blueStretchyIcon',
       draggable: true
     });
     placemark.events.add('dragend', () => {
@@ -760,7 +643,7 @@ function updateManualPointsList() {
       pointType = '🏁 Конец';
       icon = '🏁';
     } else {
-      pointType = `📍 Точка ${index - 1}`;
+      pointType = `📍 Точка ${index}`;
       icon = '📍';
     }
     
@@ -778,6 +661,17 @@ function updateManualPointsList() {
       </div>
     `;
     list.appendChild(pointElement);
+  });
+  updateManualMarkersLabels();
+}
+function updateManualMarkersLabels() {
+  manualRoutePoints.forEach((p, idx) => {
+    if (!p || !p.placemark || !p.placemark.properties) return;
+    if (p.type === 'intermediate') {
+      p.placemark.properties.set('iconContent', String(idx));
+    } else {
+      p.placemark.properties.unset('iconContent');
+    }
   });
 }
 
@@ -839,14 +733,20 @@ async function buildManualRouteYandex() {
       routeActiveStrokeWidth: 6,
       routeActiveStrokeColor: '#4CAF50',
       routeStrokeWidth: 4,
-      routeStrokeColor: '#388E3C'
+      routeStrokeColor: '#388E3C',
+      wayPointVisible: false,
+      viaPointVisible: false,
+      wayPointStartVisible: false,
+      wayPointFinishVisible: false
     }
   );
 
   map.geoObjects.add(manualRouteYandexRouter);
-  manualRouteYandexRouter.getWayPoints().options.set('draggable', true);
-  manualRouteYandexRouter.getWayPoints().events.add('dragend', () => {
-    updateStatus('🔄 Перестраиваю ручной маршрут...');
+  manualRouteYandexRouter.options.set({
+    wayPointVisible: false,
+    viaPointVisible: false,
+    wayPointStartVisible: false,
+    wayPointFinishVisible: false
   });
 
   manualRouteYandexRouter.model.events.add('requestsuccess', async () => {
@@ -867,8 +767,6 @@ async function buildManualRouteYandex() {
     } else {
       hideManualRouteWarning();
       updateStatus(`Безопасный ручной маршрут построен! ${distance}, ${duration}`);
-      
-      showElevationProfile(route, 'manualElevationCanvas', 'manualRouteElevation');
     }
   });
 
@@ -925,7 +823,6 @@ function finishManualRouteAnyway() {
   
   if (manualRouteYandexRouter) {
     const route = manualRouteYandexRouter.getRoutes().get(0);
-    showElevationProfile(route, 'manualElevationCanvas', 'manualRouteElevation');
   }
 }
 
@@ -933,6 +830,7 @@ function clearManualRoute() {
   manualRoutePoints = [];
   
   manualPlacemarks.forEach(pm => {
+    if (pm === pointA || pm === pointB) return;
     if (pm && map.geoObjects.indexOf(pm) !== -1) {
       map.geoObjects.remove(pm);
     }
@@ -952,8 +850,6 @@ function clearManualRoute() {
   document.getElementById('manualPointsList').innerHTML = '';
   document.getElementById('manualRouteStats').style.display = 'none';
   document.getElementById('manualRouteWarning').style.display = 'none';
-  document.getElementById('manualElevationChart').style.display = 'none';
-  
   updateStatus('Ручной маршрут очищен');
 }
 
@@ -1034,7 +930,6 @@ function clearRouteVisuals() {
   
   document.getElementById('routeStats').style.display = 'none';
   document.getElementById('routeWarning').style.display = 'none';
-  document.getElementById('elevationChart').style.display = 'none';
 }
 
 function clearAll() {
@@ -1261,11 +1156,13 @@ function loadRepairZones() {
 
           map.geoObjects.add(polygon);
           zonePolygonsById[String(z.id)] = polygon;
+
         } catch (e) {
           console.error('Ошибка при обработке зоны:', z, e);
         }
       });
       focusZoneFromUrl();
+
     })
     .catch(err => {
       console.error('Ошибка загрузки зон:', err);
