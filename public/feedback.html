@@ -296,9 +296,11 @@ document.addEventListener('DOMContentLoaded', () => {
         feedbacksList.innerHTML = `
           <div class="no-feedbacks">
             <p>У вас пока нет обращений</p>
-            <button onclick="showForm()" class="button">Создать обращение</button>
+            <button id="createFeedbackBtn" class="button">Создать обращение</button>
           </div>
         `;
+        document.getElementById('createFeedbackBtn')
+          .addEventListener('click', showForm);
         return;
       }
       let html = `
