@@ -18,7 +18,7 @@
   <h2>Обратная связь</h2>
   <div id="feedbackContainer">
 
-    <form id="feedbackForm">
+    <form id="feedbackForm" enctype="multipart/form-data">
       <div id="guestFields" style="display:none;">
         <input type="text" name="name" placeholder="Ваше имя">
         <input type="email" name="email" placeholder="Email для ответа">
@@ -35,7 +35,10 @@
 
       <textarea name="message" placeholder="Опишите ваше обращение" required></textarea>
 
-      <input type="file" name="files[]" multiple accept="image/*,.pdf">
+      <input type="file" id="filesInput" multiple accept="image/*,.pdf,application/pdf">
+      <div id="filesList" style="margin:10px 0;"></div>
+
+
 
       <button type="submit">Отправить</button>
     </form>
@@ -82,8 +85,6 @@ function initHeader() {
         `;
       }
       
-
-
       const nav = document.getElementById('nav');
 
       if (!nav.dataset.initialized) {
@@ -130,13 +131,9 @@ function initHeader() {
           ? user.avatar_path
           : location.origin + user.avatar_path;
       }
-
-      // ❗ ключ: не переназначаем src, если он тот же
       if (avatarImg && avatarImg.getAttribute('src') !== newSrc) {
         avatarImg.setAttribute('src', newSrc);
       }
-
-      // fallback без бесконечного цикла
       if (avatarImg) {
         avatarImg.onerror = () => {
           if (avatarImg.dataset.fallbackDone) return;
@@ -172,10 +169,48 @@ async function getUserInfo() {
   return null;
 }
 
+const selectedFiles = [];
+const filesInput = document.getElementById('filesInput');
+const filesList = document.getElementById('filesList');
+
+function renderFiles() {
+  if (!selectedFiles.length) { filesList.innerHTML = ''; return; }
+
+  filesList.innerHTML = selectedFiles.map((f, idx) => `
+    <div style="display:flex;align-items:center;gap:10px;margin:6px 0;">
+      <span>${f.name} (${Math.round(f.size/1024)} KB)</span>
+      <button type="button" data-idx="${idx}" style="padding:4px 8px;">Удалить</button>
+    </div>
+  `).join('');
+
+  filesList.querySelectorAll('button[data-idx]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      selectedFiles.splice(Number(btn.dataset.idx), 1);
+      renderFiles();
+    });
+  });
+}
+
+filesInput.addEventListener('change', () => {
+  for (const f of filesInput.files) selectedFiles.push(f);
+  filesInput.value = ''; 
+  renderFiles();
+});
+
 document.getElementById('feedbackForm').addEventListener('submit', async e => {
   e.preventDefault();
 
-  const formData = new FormData(e.target);
+  const form = e.target;
+  const formData = new FormData();
+  formData.append('type', form.querySelector('[name="type"]').value);
+  formData.append('message', form.querySelector('[name="message"]').value);
+  const nameEl = form.querySelector('[name="name"]');
+  const emailEl = form.querySelector('[name="email"]');
+  if (nameEl) formData.append('name', nameEl.value);
+  if (emailEl) formData.append('email', emailEl.value);
+  for (const f of selectedFiles) {
+    formData.append('files[]', f);
+  }
 
   try {
     const res = await fetch('/api/feedback.php', {
@@ -187,19 +222,20 @@ document.getElementById('feedbackForm').addEventListener('submit', async e => {
     console.log('RAW FEEDBACK RESPONSE:', text);
 
     let data;
-    try {
-      data = JSON.parse(text);
-    } catch {
+    try { data = JSON.parse(text); } catch {
       showError('Сервер вернул ошибку. Сообщение не отправлено.');
       return;
     }
 
     if (!res.ok || data.success === false) {
-      showError(data.error || 'Ошибка отправки');
+      showError((data.error || 'Ошибка отправки') + (data.message ? (': ' + data.message) : ''));
       return;
     }
 
     showSuccess('Спасибо! Сообщение отправлено. ID вашего обращения: ' + data.id);
+    form.reset();
+    selectedFiles.length = 0;
+    renderFiles();
     
     const user = await getUserInfo();
     if (!user) {
