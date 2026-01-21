@@ -113,15 +113,18 @@ if ($method === 'POST') {
             exit;
         }
         $stmt = $pdo->prepare("
-            INSERT INTO feedback (user_id, type, message, created_at, admin_reply_read)
-            VALUES (:user_id, :type, :message, NOW(), FALSE)
+        INSERT INTO feedback (user_id, type, message, created_at, admin_reply_read)
+        VALUES (:user_id, :type, :message, NOW(), FALSE)
+        RETURNING id
         ");
         $stmt->execute([
-            'user_id' => $userId,
-            'type' => $type,
-            'message' => $message
+        'user_id' => $userId,
+        'type' => $type,
+        'message' => $message
         ]);
-        $feedbackId = $pdo->lastInsertId();
+
+        $feedbackId = (int)$stmt->fetchColumn();
+
         $uploadedFiles = [];
 
         if (isset($_FILES['files']) && is_array($_FILES['files']['name'])) {
